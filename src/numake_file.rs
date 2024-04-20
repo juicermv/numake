@@ -1,12 +1,16 @@
-use std::fs;
+use std::{fs};
 
 use std::io::{BufReader, Write};
 
-use std::path::{Path, PathBuf};
+
+use std::path::{PathBuf};
 use std::process::Command;
 use std::ptr::null_mut;
+use anyhow::anyhow;
+
 
 use mlua::Lua;
+use mlua::prelude::LuaError;
 use tempfile::tempfile;
 use uuid::Uuid;
 use zip::ZipArchive;
@@ -20,20 +24,24 @@ pub struct Project {
     pub include_paths: Vec<String>,
     pub lib_paths: Vec<String>,
     pub libs: Vec<String>,
-    pub lang: String,
-    pub files: Vec<PathBuf>,
+    pub files: Vec<String>,
     pub defines: Vec<String>,
+
     pub assets: Vec<(String, String)>,
+
+    pub lang: String,
+    pub output: String,
+
+    pub file: PathBuf,
     pub workspace: PathBuf,
+    pub workdir: PathBuf, // Should already exist
 
     pub target: Option<String>,
     pub configuration: Option<String>,
     pub arch: Option<String>,
     pub toolset_compiler: Option<String>,
     pub toolset_linker: Option<String>,
-    pub file: PathBuf,
-    pub output: String,
-    pub workdir: PathBuf,
+
     pub msvc: bool,
 }
 
@@ -53,52 +61,54 @@ impl Project {
             files: Vec::new(),
             defines: Vec::new(),
             assets: Vec::new(),
-            workspace: dunce::canonicalize(&args.workdir).unwrap().join(".numake"),
+
             target: args.target.clone(),
             configuration: args.configuration.clone(),
             arch: args.arch.clone(),
             toolset_compiler: args.toolset_compiler.clone(),
             toolset_linker: args.toolset_linker.clone(),
-            file: PathBuf::from(&args.file),
             output: args.output.clone(),
+
+            file: dunce::canonicalize(&args.file).unwrap(),
             workdir: dunce::canonicalize(&args.workdir).unwrap(),
+            workspace: dunce::canonicalize(&args.workdir).unwrap().join(".numake"),
+
             msvc: args.msvc,
         }
     }
 
-    pub fn setup_lua_vals(&mut self) {
+    pub fn setup_lua_vals(&mut self) -> anyhow::Result<()> {
         unsafe {
             PTR = self;
         }
 
         self.lua_instance
             .globals()
-            .set("msvc", self.msvc.clone())
-            .unwrap();
+            .set("msvc", self.msvc.clone())?;
+
         self.lua_instance
             .globals()
-            .set("target", self.target.clone())
-            .unwrap();
+            .set("target", self.target.clone())?;
+
         self.lua_instance
             .globals()
-            .set("configuration", self.configuration.clone())
-            .unwrap();
+            .set("configuration", self.configuration.clone())?;
+
         self.lua_instance
             .globals()
-            .set("arch", self.arch.clone())
-            .unwrap();
+            .set("arch", self.arch.clone())?;
+
         self.lua_instance
             .globals()
-            .set("toolset_compiler", self.toolset_compiler.clone())
-            .unwrap();
+            .set("toolset_compiler", self.toolset_compiler.clone())?;
+
         self.lua_instance
             .globals()
-            .set("toolset_linker", self.toolset_linker.clone())
-            .unwrap();
+            .set("toolset_linker", self.toolset_linker.clone())?;
+
         self.lua_instance
             .globals()
-            .set("output", self.output.clone())
-            .unwrap();
+            .set("output", self.output.clone())?;
 
         // Functions
         self.lua_instance
@@ -108,10 +118,8 @@ impl Project {
                 self.lua_instance
                     .create_function_mut(|_, path: String| unsafe {
                         (*PTR).add_include_path(path.clone())
-                    })
-                    .unwrap(),
-            )
-            .unwrap();
+                    })?,
+            )?;
 
         self.lua_instance
             .globals()
@@ -121,9 +129,9 @@ impl Project {
                     .create_function_mut(|_, paths: Vec<String>| unsafe {
                         (*PTR).set_include_paths(paths)
                     })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -133,9 +141,9 @@ impl Project {
                     .create_function_mut(|_, flag: String| unsafe {
                         (*PTR).add_compiler_flag(flag)
                     })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -145,9 +153,9 @@ impl Project {
                     .create_function_mut(|_, flags: Vec<String>| unsafe {
                         (*PTR).set_compiler_flags(flags)
                     })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -155,9 +163,9 @@ impl Project {
                 "add_linker_flag",
                 self.lua_instance
                     .create_function_mut(|_, flag: String| unsafe { (*PTR).add_linker_flag(flag) })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -167,9 +175,9 @@ impl Project {
                     .create_function_mut(|_, flags: Vec<String>| unsafe {
                         (*PTR).set_linker_flags(flags)
                     })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -177,9 +185,9 @@ impl Project {
                 "add_lib_path",
                 self.lua_instance
                     .create_function_mut(|_, path: String| unsafe { (*PTR).add_lib_path(path) })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -189,9 +197,9 @@ impl Project {
                     .create_function_mut(|_, paths: Vec<String>| unsafe {
                         (*PTR).set_lib_paths(paths)
                     })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -199,9 +207,9 @@ impl Project {
                 "add_lib",
                 self.lua_instance
                     .create_function_mut(|_, lib: String| unsafe { (*PTR).add_lib(lib) })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -209,9 +217,9 @@ impl Project {
                 "set_libs",
                 self.lua_instance
                     .create_function_mut(|_, libs: Vec<String>| unsafe { (*PTR).set_libs(libs) })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -220,13 +228,13 @@ impl Project {
                 self.lua_instance
                     .create_function_mut(|_, (path, recursive): (String, bool)| unsafe {
                         (*PTR).add_dir(
-                            &Path::new(&(*PTR).workdir).parent().unwrap().join(path),
+                            &dunce::canonicalize((*PTR).workdir.join(path)).unwrap(),
                             recursive,
                         )
                     })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -234,11 +242,11 @@ impl Project {
                 "add_file",
                 self.lua_instance
                     .create_function_mut(|_, path: String| unsafe {
-                        (*PTR).add_file(&Path::new(&(*PTR).workdir).join(path))
+                        (*PTR).add_file(&dunce::canonicalize((*PTR).workdir.join(path)).unwrap())
                     })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -248,9 +256,9 @@ impl Project {
                     .create_function_mut(|_, (filepath, newpath): (String, String)| unsafe {
                         (*PTR).add_asset(filepath, newpath)
                     })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -258,9 +266,9 @@ impl Project {
                 "define",
                 self.lua_instance
                     .create_function_mut(|_, define: String| unsafe { (*PTR).define(define) })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         self.lua_instance
             .globals()
@@ -268,11 +276,11 @@ impl Project {
                 "workspace_download_zip",
                 self.lua_instance
                     .create_function_mut(|_, url: String| unsafe {
-                        (*PTR).workspace_download_zip(url)
+                        Ok((*PTR).workspace_download_zip(url).unwrap())
                     })
-                    .unwrap(),
+                    ?,
             )
-            .unwrap();
+            ?;
 
         // Get and require an online numake script, for package management mainly.
         self.lua_instance
@@ -281,68 +289,79 @@ impl Project {
                 "require_url",
                 self.lua_instance
                     .create_function_mut(|_, url: String| unsafe { (*PTR).require_url(url) })
-                    .unwrap(),
-            )
-            .unwrap();
+                    ?,
+            )?;
+
+        Ok(())
     }
 
-    pub fn process(&mut self) {
+    pub fn process(&mut self) -> anyhow::Result<()>{
         if !self.workspace.exists() {
-            fs::create_dir_all(&self.workspace).unwrap();
+            fs::create_dir_all(&self.workspace)?;
+        }
+
+        let filepath = dunce::canonicalize(
+            self.workdir.join(&self.file)
+        )?;
+
+        if !filepath.starts_with(&self.workdir) { // Throw error if file is outside working directory
+            Err(anyhow!("NuMake file cannot be outside the working directory!"))?
         }
 
         // Parse file
         self.lua_instance
-            .load(fs::read_to_string(Path::new(&self.workdir).join(&self.file)).unwrap())
+            .load(fs::read_to_string(filepath)?)
             .exec()
             .unwrap();
 
         self.toolset_compiler = self.lua_instance.globals().get("toolset_compiler").ok();
         self.toolset_linker = self.lua_instance.globals().get("toolset_linker").ok();
-        self.target = self.lua_instance.globals().get("target").unwrap();
-        self.arch = self.lua_instance.globals().get("arch").unwrap();
-        self.configuration = self.lua_instance.globals().get("configuration").unwrap();
+        self.target = self.lua_instance.globals().get("target")?;
+        self.arch = self.lua_instance.globals().get("arch")?;
+        self.configuration = self.lua_instance.globals().get("configuration")?;
 
-        self.output = self.lua_instance.globals().get("output").unwrap();
-        self.msvc = self.lua_instance.globals().get("msvc").unwrap();
+        self.output = self.lua_instance.globals().get("output")?;
+        self.msvc = self.lua_instance.globals().get("msvc")?;
+
+        Ok(())
     }
 
-    pub fn build(&mut self) -> Option<()> {
+    pub fn build(&mut self) -> anyhow::Result<()> {
         if self.toolset_compiler == None {
-            Err("ERROR: NO COMPILER SPECIFIED!").unwrap()
+            Err(anyhow!("ERROR: NO COMPILER SPECIFIED!"))?
         }
 
         if self.toolset_linker == None {
-            Err("ERROR: NO LINKER SPECIFIED!").unwrap()
+            Err(anyhow!("ERROR: NO LINKER SPECIFIED!"))?
         }
 
         let config: String = format!(
             "{}-{}-{}",
-            self.arch.clone()?,
-            self.target.clone()?,
-            self.configuration.clone()?
+            self.arch.clone().unwrap_or("null".to_string()),
+            self.target.clone().unwrap_or("null".to_string()),
+            self.configuration.clone().unwrap_or("null".to_string())
         );
 
         let obj_dir: PathBuf = self.workspace.join(format!("obj/{}", &config));
         let out_dir: PathBuf = self.workspace.join(format!("out/{}", &config));
 
         if !obj_dir.exists() {
-            fs::create_dir_all(&obj_dir).unwrap()
+            fs::create_dir_all(&obj_dir)?;
         }
 
         if !out_dir.exists() {
-            fs::create_dir_all(&out_dir).unwrap()
+            fs::create_dir_all(&out_dir)?;
         }
 
         let mut o_files: Vec<String> = Vec::new(); // Can't assume all compilers support wildcards.
 
         for file in self.files.clone() {
-            let mut compiler = Command::new(&self.toolset_compiler.clone()?);
+            let mut compiler = Command::new(&self.toolset_compiler.clone().unwrap_or("null".to_string()));
 
             let o_file = format!(
                 "{}/{}.{}",
-                &obj_dir.to_str().unwrap(),
-                &file.file_name().unwrap().to_str().unwrap(),
+                &obj_dir.to_str().unwrap_or("ERROR"),
+                &file,
                 if self.msvc { "obj" } else { "o" }
             );
 
@@ -369,20 +388,19 @@ impl Project {
                 compiler_args.push(flag)
             }
 
-            compiler_args.push(file.to_str().unwrap().to_string());
+            compiler_args.push(file);
 
             println!(
                 "{} exited with {}.",
-                self.toolset_compiler.clone().unwrap(),
+                self.toolset_compiler.clone().unwrap_or("null".to_string()),
                 compiler
                     .args(&compiler_args)
-                    .current_dir(dunce::canonicalize(&self.workdir).unwrap())
-                    .status()
-                    .unwrap()
+                    .current_dir(&self.workdir)
+                    .status()?
             );
         }
 
-        let mut linker = Command::new(&self.toolset_linker.clone()?);
+        let mut linker = Command::new(&self.toolset_linker.clone().unwrap_or("null".to_string()));
         let mut linker_args = Vec::from(o_files);
 
         for lib in self.libs.clone() {
@@ -396,11 +414,11 @@ impl Project {
         if self.msvc {
             linker_args.push(format!(
                 "/out:{}/{}",
-                &obj_dir.to_str().unwrap(),
+                &obj_dir.to_str().unwrap_or("ERROR"),
                 &self.output
             ));
         } else {
-            linker_args.push(format!("-o{}/{}", &obj_dir.to_str().unwrap(), &self.output));
+            linker_args.push(format!("-o{}/{}", &obj_dir.to_str().unwrap_or("ERROR"), &self.output));
         }
 
         for flag in self.linker_flags.clone() {
@@ -420,59 +438,49 @@ impl Project {
             self.toolset_linker.clone().unwrap(),
             linker
                 .args(&linker_args)
-                .current_dir(dunce::canonicalize(&self.workdir).unwrap())
-                .status()
-                .unwrap()
+                .current_dir(&self.workdir)
+                .status()?
         );
 
         for (oldpath, newpath) in self.assets.clone() {
-            let old_path = Path::new(&oldpath); // Already canonicalized in project.rs
-            let new_path = Path::new(&out_dir).join(Path::new(&newpath));
+            let old_path = PathBuf::from(&oldpath); // Already canonicalized and validated.
+            let new_path = out_dir.join(&newpath); // Needs to be validated during build, and so we do.
 
-            if old_path.starts_with(dunce::canonicalize(&self.workdir).unwrap()) {
-                if new_path.starts_with(&out_dir) {
-                    // Make sure we haven't escaped our output dir
-                    fs::copy(old_path, new_path).unwrap();
-                } else {
-                    Err(format!(
-                        "Asset file '{}' copied to invalid destination! ({})",
-                        old_path.to_str().unwrap(),
-                        new_path.to_str().unwrap()
-                    ))
-                    .unwrap()
-                }
+            if new_path.starts_with(&out_dir) {
+                // Make sure we haven't escaped our output dir
+                fs::copy(old_path, new_path)?;
             } else {
-                Err(format!(
-                    "Asset file '{}' originates outside workspace!",
-                    old_path.to_str().unwrap()
-                ))
-                .unwrap()
+                Err(anyhow!(format!(
+                    "Asset file '{}' copied to invalid destination! ({})",
+                    old_path.to_str().unwrap_or("ERROR"),
+                    new_path.to_str().unwrap_or("ERROR")
+                )))?
             }
         }
 
-        Some(())
+        Ok(())
     }
 
-    fn workspace_download_zip(&mut self, url: String) -> mlua::Result<String> {
+    fn workspace_download_zip(&mut self, url: String) -> anyhow::Result<String> {
         let response = reqwest::blocking::get(&url).unwrap();
 
         if response.status().is_success() {
-            // Where the archive will be extracted.
+
             let buf: [u8; 16] = *url.as_bytes().last_chunk::<16>().unwrap();
-            let path = format!(
+            let path = format!( // Where the archive will be extracted.
                 "{}/remote/{}",
-                self.workspace.to_str().unwrap(),
+                self.workspace.to_str().unwrap_or("ERROR"),
                 Uuid::new_v8(buf)
             );
             if fs::metadata(&path).is_err() {
                 // Don't "download" again. (data already in memory)
-                fs::create_dir_all(&path).unwrap();
-                let path_buf = dunce::canonicalize(&path).unwrap();
+                fs::create_dir_all(&path)?;
+                let path_buf = dunce::canonicalize(&path)?;
                 let mut tempfile = tempfile()?; // Create a tempfile as a buffer for our response bytes because nothing else implements Seek ffs
                 tempfile.write_all(response.bytes().unwrap().as_ref())?;
 
-                let mut zip = ZipArchive::new(BufReader::new(tempfile)).unwrap();
-                zip.extract(&path_buf).unwrap();
+                let mut zip = ZipArchive::new(BufReader::new(tempfile))?;
+                zip.extract(&path_buf)?;
             }
             Ok(path)
         } else {
@@ -539,51 +547,48 @@ impl Project {
         Ok(0)
     }
 
-    fn add_dir(&mut self, pathbuf: &PathBuf, recursive: bool) -> mlua::Result<i32> {
+    fn add_dir(&mut self, pathbuf: &PathBuf, recursive: bool) -> mlua::Result<()> {
+        if !pathbuf.starts_with(&self.workdir) {
+            Err(LuaError::runtime("Path may not exit working directory!"))?
+        }
+
         for entry in fs::read_dir(pathbuf)? {
-            let path = dunce::canonicalize(entry?.path()).unwrap();
+            let path = dunce::canonicalize(entry?.path())?;
             if path.is_dir() && recursive {
                 self.add_dir(&path, true)?;
             }
             if path.is_file() {
-                if path.extension().unwrap() == "cpp"
-                    || path.extension().unwrap() == "c"
-                    || path.extension().unwrap() == "cxx"
-                    || path.extension().unwrap() == "h"
-                    || path.extension().unwrap() == "hxx"
-                    || path.extension().unwrap() == "hpp"
-                {
-                    self.files.push(path);
-                }
+                self.add_file(&path)?;
             }
         }
-        Ok(0)
+        Ok(())
     }
 
-    fn add_file(&mut self, file: &PathBuf) -> mlua::Result<i32> {
-        let path = dunce::canonicalize(file).unwrap();
-        if path.is_file()
-            && (path.extension().unwrap() == "cpp"
-                || path.extension().unwrap() == "c"
-                || path.extension().unwrap() == "cxx"
-                || path.extension().unwrap() == "h"
-                || path.extension().unwrap() == "hxx"
-                || path.extension().unwrap() == "hpp")
+    fn add_file(&mut self, file: &PathBuf) -> mlua::Result<()> {
+        if !file.starts_with(&self.workdir) {
+            Err(LuaError::runtime("Path may not exit working directory!"))?
+        }
+
+        if file.exists() && file.is_file()
         {
-            self.files.push(path);
-            Ok(0)
+            self.files.push(file.to_str().unwrap_or("ERROR").to_string());
+            Ok(())
         } else {
-            Err("Invalid file!").unwrap()
+            Err(LuaError::runtime("Invalid file!"))?
         }
     }
 
-    fn add_asset(&mut self, filepath: String, newpath: String) -> mlua::Result<i32> {
-        let path = dunce::canonicalize(filepath.to_string()).unwrap(); // Will automatically error if path doesn't exist WHICH IS STUPID AS HELL. Don't need to join to workdir since we already assume it is relative to it. Will validate in main.
+    fn add_asset(&mut self, filepath: String, newpath: String) -> mlua::Result<()> {
+        let path = &dunce::canonicalize(self.workdir.join(&filepath))?; // Will automatically error if path doesn't exist.
+        if !path.starts_with(&self.workdir) {
+            Err(LuaError::runtime("Path may not exit working directory!"))?
+        }
+
         if path.is_file() {
-            self.assets.push((filepath, newpath)); // Will validate new path later in main
-            Ok(0)
+            self.assets.push((filepath, newpath)); // Will validate new path later during build.
+            Ok(())
         } else {
-            Err("Invalid file!").unwrap()
+            Err(LuaError::runtime("Invalid file!"))?
         }
     }
 

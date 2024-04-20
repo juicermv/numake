@@ -78,7 +78,6 @@ end
 -- Make sure to install SDL2 via your package manager!
 if target == "gcc" then
     add_lib("SDL2")
-
     define("linux")
     msvc=false
     set_compiler_flags({"--verbose"})
