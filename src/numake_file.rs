@@ -334,7 +334,7 @@ impl Project {
             fs::create_dir_all(&out_dir).unwrap()
         }
 
-        let mut o_files: String = "".to_string(); // Can't assume all compilers support wildcards.
+        let mut o_files: Vec<String> = Vec::new(); // Can't assume all compilers support wildcards.
 
         for file in self.files.clone() {
             let mut compiler = Command::new(&self.toolset_compiler.clone()?);
@@ -342,13 +342,12 @@ impl Project {
             let o_file = format!(
                 "{}/{}.{}",
                 &obj_dir.to_str().unwrap(),
-                file.file_name().unwrap().to_str().unwrap(),
+                &file.file_name().unwrap().to_str().unwrap(),
                 if self.msvc { "obj" } else { "o" }
             );
 
             let mut compiler_args = Vec::from([
                 "-c".to_string(),
-                file.to_str().unwrap().to_string(),
                 if self.msvc {
                     format!("-Fo:{}", &o_file)
                 } else {
@@ -356,7 +355,7 @@ impl Project {
                 },
             ]);
 
-            o_files += &format!("{} ", &o_file);
+            o_files.push(o_file);
 
             for incl in self.include_paths.clone() {
                 compiler_args.push(format!("-I{incl}"))
@@ -370,6 +369,8 @@ impl Project {
                 compiler_args.push(flag)
             }
 
+            compiler_args.push(file.to_str().unwrap().to_string());
+
             println!(
                 "{} exited with {}.",
                 self.toolset_compiler.clone().unwrap(),
@@ -382,7 +383,7 @@ impl Project {
         }
 
         let mut linker = Command::new(&self.toolset_linker.clone()?);
-        let mut linker_args = Vec::from([format!("{}", o_files)]);
+        let mut linker_args = Vec::from(o_files);
 
         for lib in self.libs.clone() {
             linker_args.push(if self.msvc { lib } else { format!("-l{lib}") })

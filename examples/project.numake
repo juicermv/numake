@@ -81,7 +81,9 @@ if target == "gcc" then
 
     define("linux")
     msvc=false
-    toolset_compiler = "gcc"
+    set_compiler_flags({"--verbose"})
+    set_linker_flags({"--verbose"})
+    toolset_compiler = "g++"
     toolset_linker = "g++"
     output = "test"
 end
