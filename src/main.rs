@@ -41,10 +41,11 @@ fn main() {
             io::stdout()
                 .write_all(
                     format!(
-                        "{{ \"include\": [ {:?} ] }}",
+                        "{{\n\t'include': \n\t[ {} \n\t]\n}}",
                         proj.include_paths
-                            .iter()
-                            .map(|item| { item.to_string() + ", " })
+                            .into_iter()
+                            .map(|item| { format!("\n\t\t'{}', ", item) })
+                            .collect::<String>()
                     )
                     .as_bytes(),
                 )
