@@ -81,8 +81,8 @@ At the moment, NuMake doesn't have much, so I might as well include it here.
 Internally, changes the arguments passed to the compiler and linker.
 This is false by default and can be set either by just setting it to true in your script or feeding it via the commandline with `--msvc`.
 
-#### `arch`, `target`, `configuration`: String
-Like `msvc`, you can either set these in the script itself or feed them through the commandline like shown earlier. These are all set to `"unspecified"` by default, and they are actually used to name the directory under `workspace/out` where your output is stored.
+#### `arch`, `target`, `configuration`: String | nil
+Like `msvc`, you can either set these in the script itself or feed them through the commandline like shown earlier. These are all set to `nil` by default, and they are actually used to name the directory under `workspace/out` where your output is stored.
 
 #### `workdir`: String
 This one can only be fed through the commandline via `--workdir <path>` and is not accessible to your script. This changes the working directory of NuMake itself. So let's say you have NuMake in one place and want to run a script in another directory, just pass where your script is located to the `workdir` and it'll run it. Do note that the source code itself needs to be in the same directory as the script. Child directories are fine too.
@@ -90,8 +90,10 @@ This one can only be fed through the commandline via `--workdir <path>` and is n
 #### `output`: String
 This sets the name of whatever it is you're building. So a DLL would have its `output` be `"adll.dll"` same goes for an exe or static library or whatever else you're doing! This is completely accessible via the script and can be fed through the commandline like the other variables.
 
-#### `toolset_compiler`, `toolset_linker`: String
-These are the paths to your compiler and linker respectively. Can be fully modified in your script as well as passed through the commandline.
+#### `toolset_compiler`, `toolset_linker`: String | nil
+These are the paths to your compiler and linker respectively. 
+Can be fully modified in your script as well as passed through the commandline.
+Building will not commence if these are not set.
 
 
 #### `file`: String

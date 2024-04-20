@@ -2,11 +2,11 @@ if target == "list" then
     print("Available Targets: msvc, gcc")
 end
 
-if target == "unspecified" then
+if target == nil then
     target = "msvc"
 end
 
-if arch == "unspecified" or arch=="auto" then 
+if arch == nil or arch=="auto" then
     arch = "x86"
 end
 
@@ -36,8 +36,7 @@ if target == "msvc" then
         WIN10_SDK_LOCATION .."/include/" .. WIN10_SDK_BUILD .. "/shared",
         WIN10_SDK_LOCATION .."/include/" .. WIN10_SDK_BUILD .. "/winrt",
         WIN10_SDK_LOCATION .."/include/" .. WIN10_SDK_BUILD .. "/cppwinrt",
-        NET_48 .. "/Include/um",
-        sdl_path .. "/SDL2-2.30.2/include"
+        NET_48 .. "/Include/um"
     }
     
     libs = {
@@ -56,7 +55,6 @@ if target == "msvc" then
     }
 
     lib_paths = {
-        sdl_path .. "/SDL2-2.30.2/lib/" .. arch,
         MSVC_LOCATION .."/lib/" .. arch,
         MSVC_LOCATION .."/atlmfc/lib/" .. arch,
         VC_AUX .. "/VS/lib/" .. arch,
@@ -69,6 +67,8 @@ if target == "msvc" then
     set_include_paths (include_paths)
     set_libs (libs)
 
+    add_include_path(sdl_path .. "/SDL2-2.30.2/include")
+    add_lib_path(sdl_path .. "/SDL2-2.30.2/lib/" .. arch)
     add_lib("SDL2.lib")
     add_lib("SDL2main.lib")
     add_asset(sdl_path .. "/SDL2-2.30.2/lib/" .. arch .. "/SDL2.dll", "SDL2.dll")
