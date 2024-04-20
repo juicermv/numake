@@ -1,0 +1,96 @@
+if target == "list" then 
+    print("Available Targets: msvc, gcc")
+end
+
+if target == "unspecified" then
+    target = "msvc"
+end
+
+if arch == "unspecified" or arch=="auto" then 
+    arch = "x86"
+end
+
+if not arch == "x86" or not arch == "x64" then 
+    print("Arch can only be either x86 or x64!")
+end
+
+configuration = "any"
+
+-- Sample. Make sure this is accurate to your PC.
+MSVC_LOCATION = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.39.33519"
+WIN10_SDK_LOCATION = "C:/Program Files (x86)/Windows Kits/10/"
+WIN10_SDK_BUILD = "10.0.22621.0"
+VC_AUX = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary"
+NET_48 = "C:/Program Files (x86)/Windows Kits/NETFXSDK/4.8"
+
+-- "Rule" for MSVC
+if target == "msvc" then
+    sdl_path = workspace_download_zip("https:/github.com/libsdl-org/SDL/releases/download/release-2.30.2/SDL2-devel-2.30.2-VC.zip")
+
+    include_paths = {
+        MSVC_LOCATION .. "/include",
+        MSVC_LOCATION .. "/atlmfc/include",
+        VC_AUX .. "/VS/include",
+        WIN10_SDK_LOCATION .."/include/" .. WIN10_SDK_BUILD .. "/ucrt",
+        WIN10_SDK_LOCATION .."/include/" .. WIN10_SDK_BUILD .. "/um",
+        WIN10_SDK_LOCATION .."/include/" .. WIN10_SDK_BUILD .. "/shared",
+        WIN10_SDK_LOCATION .."/include/" .. WIN10_SDK_BUILD .. "/winrt",
+        WIN10_SDK_LOCATION .."/include/" .. WIN10_SDK_BUILD .. "/cppwinrt",
+        NET_48 .. "/Include/um",
+        sdl_path .. "/SDL2-2.30.2/include"
+    }
+    
+    libs = {
+        "kernel32.lib",
+        "user32.lib",
+        "gdi32.lib",
+        "winspool.lib",
+        "comdlg32.lib",
+        "advapi32.lib",
+        "shell32.lib",
+        "ole32.lib",
+        "oleaut32.lib",
+        "uuid.lib",
+        "odbc32.lib",
+        "odbccp32.lib",
+    }
+
+    lib_paths = {
+        sdl_path .. "/SDL2-2.30.2/lib/" .. arch,
+        MSVC_LOCATION .."/lib/" .. arch,
+        MSVC_LOCATION .."/atlmfc/lib/" .. arch,
+        VC_AUX .. "/VS/lib/" .. arch,
+        WIN10_SDK_LOCATION .. "/lib/" .. WIN10_SDK_BUILD .. "/ucrt/" .. arch,
+        WIN10_SDK_LOCATION .. "/lib/" .. WIN10_SDK_BUILD .. "/um/" .. arch,
+        NET_48 .. "/lib/um/" .. arch,
+    }
+
+    set_lib_paths (lib_paths)
+    set_include_paths (include_paths)
+    set_libs (libs)
+
+    add_lib("SDL2.lib")
+    add_lib("SDL2main.lib")
+    add_asset(sdl_path .. "/SDL2-2.30.2/lib/" .. arch .. "/SDL2.dll", "SDL2.dll")
+    
+    add_linker_flag("/SUBSYSTEM:WINDOWS")
+    msvc=true
+    toolset_compiler = MSVC_LOCATION.."/bin/Host"..arch.."/"..arch.."/cl.exe"
+    toolset_linker = toolset_compiler
+    output = "test.exe"
+
+end
+
+-- Make sure to install SDL2 via your package manager!
+if target == "gcc" then
+    add_lib("SDL2")
+
+    define("linux")
+    msvc=false
+    toolset_compiler = "gcc"
+    toolset_linker = "g++"
+    output = "test"
+end
+
+-- After all that, we can add project files as usual!
+add_file("main.cpp")
