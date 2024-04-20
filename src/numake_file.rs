@@ -396,11 +396,11 @@ impl Project {
         if self.msvc {
             linker_args.push(format!(
                 "/out:{}/{}",
-                &out_dir.to_str().unwrap(),
+                &obj_dir.to_str().unwrap(),
                 &self.output
             ));
         } else {
-            linker_args.push(format!("-o{}/{}", &out_dir.to_str().unwrap(), &self.output));
+            linker_args.push(format!("-o{}/{}", &obj_dir.to_str().unwrap(), &self.output));
         }
 
         for flag in self.linker_flags.clone() {
