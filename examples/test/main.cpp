@@ -10,8 +10,8 @@
 
 int main(int argc, char* argv[])
 {
-    // Initialize SDL
-    if(SDL_Init(SDL_INIT_EVERYTHING) < 0)
+    // Initialize SDL events because other things may or may not be available on hardware
+    if(SDL_Init(SDL_INIT_EVENTS) < 0)
     {
         std::cout << "SDL could not be initialized!" << std::endl
                   << "SDL_Error: " << SDL_GetError() << std::endl;
