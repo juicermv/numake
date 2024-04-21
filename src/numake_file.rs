@@ -1,6 +1,6 @@
-use std::{fs};
+use std::{fs, io};
 
-use std::io::{BufReader, Write};
+use std::io::{BufReader, Read, Write};
 
 
 use std::path::{PathBuf};
@@ -16,6 +16,8 @@ use uuid::Uuid;
 use zip::ZipArchive;
 
 use crate::config::NuMakeArgs;
+use crate::error::NUMAKE_ERROR;
+
 pub struct Project {
     pub lua_instance: Lua,
 
@@ -24,7 +26,6 @@ pub struct Project {
     pub include_paths: Vec<String>,
     pub lib_paths: Vec<String>,
     pub libs: Vec<String>,
-    pub files: Vec<String>,
     pub defines: Vec<String>,
 
     pub assets: Vec<(String, String)>,
@@ -35,6 +36,8 @@ pub struct Project {
     pub file: PathBuf,
     pub workspace: PathBuf,
     pub workdir: PathBuf, // Should already exist
+
+    pub files: Vec<PathBuf>,
 
     pub target: Option<String>,
     pub configuration: Option<String>,
@@ -48,8 +51,8 @@ pub struct Project {
 static mut PTR: *mut Project = null_mut();
 
 impl Project {
-    pub fn new(args: &NuMakeArgs) -> Self {
-        Project {
+    pub fn new(args: &NuMakeArgs) -> anyhow::Result<Self> {
+        Ok(Project {
             lua_instance: Lua::new(),
 
             compiler_flags: Vec::new(),
@@ -69,12 +72,12 @@ impl Project {
             toolset_linker: args.toolset_linker.clone(),
             output: args.output.clone(),
 
-            file: dunce::canonicalize(&args.file).unwrap(),
-            workdir: dunce::canonicalize(&args.workdir).unwrap(),
-            workspace: dunce::canonicalize(&args.workdir).unwrap().join(".numake"),
+            workdir: dunce::canonicalize(&args.workdir)?,
+            file: dunce::canonicalize(dunce::canonicalize(&args.workdir)?.join(&args.file))?,
+            workspace: dunce::canonicalize(&args.workdir)?.join(".numake"),
 
             msvc: args.msvc,
-        }
+        })
     }
 
     pub fn setup_lua_vals(&mut self) -> anyhow::Result<()> {
@@ -242,7 +245,7 @@ impl Project {
                 "add_file",
                 self.lua_instance
                     .create_function_mut(|_, path: String| unsafe {
-                        (*PTR).add_file(&dunce::canonicalize((*PTR).workdir.join(path)).unwrap())
+                        (*PTR).add_file(&dunce::canonicalize((*PTR).workdir.join(path))?)
                     })
                     ?,
             )
@@ -305,7 +308,7 @@ impl Project {
         )?;
 
         if !filepath.starts_with(&self.workdir) { // Throw error if file is outside working directory
-            Err(anyhow!("NuMake file cannot be outside the working directory!"))?
+            Err(anyhow!(&NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
         }
 
         // Parse file
@@ -316,9 +319,9 @@ impl Project {
 
         self.toolset_compiler = self.lua_instance.globals().get("toolset_compiler").ok();
         self.toolset_linker = self.lua_instance.globals().get("toolset_linker").ok();
-        self.target = self.lua_instance.globals().get("target")?;
-        self.arch = self.lua_instance.globals().get("arch")?;
-        self.configuration = self.lua_instance.globals().get("configuration")?;
+        self.target = self.lua_instance.globals().get("target").ok();
+        self.arch = self.lua_instance.globals().get("arch").ok();
+        self.configuration = self.lua_instance.globals().get("configuration").ok();
 
         self.output = self.lua_instance.globals().get("output")?;
         self.msvc = self.lua_instance.globals().get("msvc")?;
@@ -328,11 +331,11 @@ impl Project {
 
     pub fn build(&mut self) -> anyhow::Result<()> {
         if self.toolset_compiler == None {
-            Err(anyhow!("ERROR: NO COMPILER SPECIFIED!"))?
+            Err(anyhow!(&NUMAKE_ERROR.TOOLSET_COMPILER_NULL))?
         }
 
         if self.toolset_linker == None {
-            Err(anyhow!("ERROR: NO LINKER SPECIFIED!"))?
+            Err(anyhow!(&NUMAKE_ERROR.TOOLSET_LINKER_NULL))?
         }
 
         let config: String = format!(
@@ -361,7 +364,7 @@ impl Project {
             let o_file = format!(
                 "{}/{}.{}",
                 &obj_dir.to_str().unwrap_or("ERROR"),
-                &file,
+                &file.file_name().unwrap_or("ERROR".as_ref()).to_str().unwrap_or("ERROR"),
                 if self.msvc { "obj" } else { "o" }
             );
 
@@ -388,7 +391,7 @@ impl Project {
                 compiler_args.push(flag)
             }
 
-            compiler_args.push(file);
+            compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
             println!(
                 "{} exited with {}.",
@@ -414,11 +417,11 @@ impl Project {
         if self.msvc {
             linker_args.push(format!(
                 "/out:{}/{}",
-                &obj_dir.to_str().unwrap_or("ERROR"),
+                &out_dir.to_str().unwrap_or("ERROR"),
                 &self.output
             ));
         } else {
-            linker_args.push(format!("-o{}/{}", &obj_dir.to_str().unwrap_or("ERROR"), &self.output));
+            linker_args.push(format!("-o{}/{}", &out_dir.to_str().unwrap_or("ERROR"), &self.output));
         }
 
         for flag in self.linker_flags.clone() {
@@ -461,40 +464,64 @@ impl Project {
         Ok(())
     }
 
-    fn workspace_download_zip(&mut self, url: String) -> anyhow::Result<String> {
-        let response = reqwest::blocking::get(&url).unwrap();
-
-        if response.status().is_success() {
-
-            let buf: [u8; 16] = *url.as_bytes().last_chunk::<16>().unwrap();
-            let path = format!( // Where the archive will be extracted.
-                "{}/remote/{}",
-                self.workspace.to_str().unwrap_or("ERROR"),
-                Uuid::new_v8(buf)
-            );
-            if fs::metadata(&path).is_err() {
-                // Don't "download" again. (data already in memory)
-                fs::create_dir_all(&path)?;
-                let path_buf = dunce::canonicalize(&path)?;
-                let mut tempfile = tempfile()?; // Create a tempfile as a buffer for our response bytes because nothing else implements Seek ffs
-                tempfile.write_all(response.bytes().unwrap().as_ref())?;
-
-                let mut zip = ZipArchive::new(BufReader::new(tempfile))?;
-                zip.extract(&path_buf)?;
-            }
-            Ok(path)
+    fn workspace_download_zip(&mut self, url: String) -> mlua::Result<String> {
+        let response = reqwest::blocking::get(&url);
+        if response.is_err() {
+            Err(mlua::Error::external(response.err().unwrap()))? // Convert error to mlua error
         } else {
-            Ok(response.status().to_string())
+            let ok_response = response.ok().unwrap();
+            if ok_response.status().is_success() {
+                let buf: [u8; 16] = *url.as_bytes().last_chunk::<16>().unwrap();
+                let path = format!( // Where the archive will be extracted.
+                                    "{}/remote/{}",
+                                    self.workspace.to_str().unwrap_or("ERROR"),
+                                    Uuid::new_v8(buf)
+                );
+                if fs::metadata(&path).is_err() {
+                    // Don't "download" again. (data already in memory)
+                    let bytes = ok_response.bytes();
+                    if bytes.is_err() {
+                        Err(mlua::Error::external(bytes.err().unwrap()))?
+                    } else {
+                        fs::create_dir_all(&path)?;
+                        let path_buf = dunce::canonicalize(&path)?;
+                        let mut tempfile = tempfile()?; // Create a tempfile as a buffer for our response bytes because nothing else implements Seek ffs
+                        tempfile.write_all(bytes.unwrap().as_ref())?;
+
+                        let zip = ZipArchive::new(BufReader::new(tempfile));
+                        if zip.is_err() {
+                            Err(mlua::Error::external(zip.err().unwrap()))?
+                        } else {
+                            let extract_result = zip.ok().unwrap().extract(&path_buf);
+                            if extract_result.is_err() {
+                                Err(mlua::Error::external(extract_result.err().unwrap()))?
+                            }
+                        }
+                    }
+                }
+                Ok(path) // Return path if already exists
+            } else {
+                Err(mlua::Error::runtime(ok_response.status()))?
+            }
         }
     }
 
-    fn require_url(&mut self, url: String) -> mlua::Result<i32> {
-        let response = reqwest::blocking::get(url).unwrap();
-        self.lua_instance
-            .load(response.text().unwrap().to_string())
-            .exec()
-            .unwrap();
-        Ok(0)
+    fn require_url(&mut self, url: String) -> mlua::Result<()> {
+        let response = reqwest::blocking::get(url);
+        if response.is_err() {
+            Err(mlua::Error::external(response.err().unwrap()))?
+        } else {
+            let text = response.ok().unwrap().text();
+            if text.is_err() {
+                Err(mlua::Error::external(text.err().unwrap()))?
+            } else {
+                self.lua_instance
+                    .load(text.ok().unwrap().to_string())
+                    .exec()
+                    .unwrap();
+                Ok(())
+            }
+        }
     }
 
     fn add_include_path(&mut self, path: String) -> mlua::Result<i32> {
@@ -549,7 +576,7 @@ impl Project {
 
     fn add_dir(&mut self, pathbuf: &PathBuf, recursive: bool) -> mlua::Result<()> {
         if !pathbuf.starts_with(&self.workdir) {
-            Err(LuaError::runtime("Path may not exit working directory!"))?
+            Err(LuaError::runtime(&NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
         }
 
         for entry in fs::read_dir(pathbuf)? {
@@ -565,31 +592,28 @@ impl Project {
     }
 
     fn add_file(&mut self, file: &PathBuf) -> mlua::Result<()> {
+        println!("{}", file.to_str().unwrap());
         if !file.starts_with(&self.workdir) {
-            Err(LuaError::runtime("Path may not exit working directory!"))?
+            Err(LuaError::runtime(&NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
         }
 
-        if file.exists() && file.is_file()
+        if file.is_file()
         {
-            self.files.push(file.to_str().unwrap_or("ERROR").to_string());
+            self.files.push(file.clone());
             Ok(())
         } else {
-            Err(LuaError::runtime("Invalid file!"))?
+            Err(LuaError::runtime(&NUMAKE_ERROR.ADD_FILE_IS_DIRECTORY))?
         }
     }
 
     fn add_asset(&mut self, filepath: String, newpath: String) -> mlua::Result<()> {
         let path = &dunce::canonicalize(self.workdir.join(&filepath))?; // Will automatically error if path doesn't exist.
         if !path.starts_with(&self.workdir) {
-            Err(LuaError::runtime("Path may not exit working directory!"))?
+            Err(LuaError::runtime(&NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
         }
 
-        if path.is_file() {
-            self.assets.push((filepath, newpath)); // Will validate new path later during build.
-            Ok(())
-        } else {
-            Err(LuaError::runtime("Invalid file!"))?
-        }
+        self.assets.push((filepath, newpath)); // Will validate new path later during build.
+        Ok(())
     }
 
     fn define(&mut self, define: String) -> mlua::Result<i32> {

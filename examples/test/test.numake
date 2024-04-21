@@ -1,0 +1,14 @@
+target = "test"
+configuration = "test"
+arch = "test"
+
+add_lib("SDL2")
+define("linux")
+msvc=false
+set_compiler_flags({"--verbose"})
+set_linker_flags({"--verbose"})
+toolset_compiler = "g++"
+toolset_linker = "g++"
+output = "test"
+
+add_file("main.cpp")

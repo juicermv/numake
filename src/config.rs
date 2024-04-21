@@ -16,28 +16,28 @@ pub enum Subcommands {
 
 #[derive(Args)]
 pub struct NuMakeArgs {
-    #[arg(long)]
+    #[arg(long, short)]
     pub target: Option<String>,
 
-    #[arg(long)]
+    #[arg(long="cfg", short='C')]
     pub configuration: Option<String>,
 
     #[arg(long)]
     pub arch: Option<String>,
 
-    #[arg(long)]
+    #[arg(long="compiler", short='c')]
     pub toolset_compiler: Option<String>,
 
-    #[arg(long)]
+    #[arg(long="linker", short='l')]
     pub toolset_linker: Option<String>,
 
-    #[arg(long, default_value = "project.numake")]
+    #[arg(long, short, default_value = "test.numake")]
     pub file: String,
 
-    #[arg(long, default_value = "out")]
+    #[arg(long, short='o', default_value = "out")]
     pub output: String,
 
-    #[arg(long, default_value = ".")]
+    #[arg(long="working-directory", short='w', default_value = ".")]
     pub workdir: String,
 
     #[arg(long)]
