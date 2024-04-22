@@ -3,6 +3,9 @@ name: Rust
 on:
   push:
     branches: [ "master" ]
+    paths-ignore:
+      - '**.yml'
+      
   pull_request:
     branches: [ "master" ]
 
@@ -100,10 +103,11 @@ jobs:
 
 
   test-x86_64-pc-windows-gnu:
-    runs-on: self-hosted
+    runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v3
+      
       - name: Run tests
         run: cargo test mingw_build --verbose --target x86_64-pc-windows-gnu
 
