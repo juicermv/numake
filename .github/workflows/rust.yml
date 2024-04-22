@@ -13,53 +13,55 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test-i686-unknown-linux-gnu:
+  test-x86_64-unknown-linux-gnu:
     runs-on: self-hosted
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Run tests
-        run: cargo test gcc_build --verbose --target i686-unknown-linux-gnu
+        run: cargo test gcc_build --verbose --target x86_64-unknown-linux-gnu
 
-  build-release-i686-unknown-linux-gnu:
+  build-release-x86_64-unknown-linux-gnu:
     runs-on: self-hosted
-    needs: test-i686-unknown-linux-gnu
-    
+    needs: test-x86_64-unknown-linux-gnu
+
     steps:
-      - uses: actions/checkout@v3
-    
+      - uses: actions/checkout@v4
+
       - name: build
-        run: cargo build --verbose --target i686-unknown-linux-gnu --release
-        
+        run: cargo build --verbose --target x86_64-unknown-linux-gnu --release
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
-        with: 
-          name: 'release-i686-unknown-linux-gnu'
-          path: 'target/i686-unknown-linux-gnu/release'
+        with:
+          name: 'release-x86_64-unknown-linux-gnu'
+          path: 'target/x86_64-unknown-linux-gnu/release'
 
 
 
-  build-debug-i686-unknown-linux-gnu:
+  build-debug-x86_64-unknown-linux-gnu:
     runs-on: self-hosted
-    needs: test-i686-unknown-linux-gnu
-    
+    needs: test-x86_64-unknown-linux-gnu
+
     steps:
-      - uses: actions/checkout@v3
-    
+      - uses: actions/checkout@v4
+
       - name: build
-        run: cargo build --verbose --target i686-unknown-linux-gnu
-        
+        run: cargo build --verbose --target x86_64-unknown-linux-gnu
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
-        with: 
-          name: 'debug-i686-unknown-linux-gnu'
-          path: 'target/i686-unknown-linux-gnu/debug'
+        with:
+          name: 'debug-x86_64-unknown-linux-gnu'
+          path: 'target/x86_64-unknown-linux-gnu/debug'
+
+
 
   test-x86_64-pc-windows-gnu:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install OpenSSL from VCPKG
         run: vcpkg install openssl
@@ -72,7 +74,7 @@ jobs:
     needs: test-x86_64-pc-windows-gnu
     
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
     
       - name: build
         run: cargo build --verbose --target x86_64-pc-windows-gnu --release
@@ -90,7 +92,7 @@ jobs:
     needs: test-x86_64-pc-windows-gnu
     
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
     
       - name: build
         run: cargo build --verbose --target x86_64-pc-windows-gnu
