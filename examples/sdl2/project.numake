@@ -1,20 +1,12 @@
-if target == "list" then 
-    print("Available Targets: msvc, gcc")
-end
-
-if target == nil then
-    target = "msvc"
-end
-
-if arch == nil or arch=="auto" then
+arch = ""
+if target.find("i686") then
     arch = "x86"
+elseif target.find("x86_64") then
+    arch = "x64"
+else
+    print("Unsupported target!")
 end
 
-if not arch == "x86" or not arch == "x64" then 
-    print("Arch can only be either x86 or x64!")
-end
-
-configuration = "any"
 
 -- Sample. Make sure this is accurate to your PC.
 MSVC_LOCATION = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.39.33519"
@@ -24,7 +16,7 @@ VC_AUX = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary"
 NET_48 = "C:/Program Files (x86)/Windows Kits/NETFXSDK/4.8"
 
 -- "Rule" for MSVC
-if target == "msvc" then
+if target.find("msvc") ~= nil then
     include_paths = {
         MSVC_LOCATION .. "/include",
         MSVC_LOCATION .. "/atlmfc/include",
@@ -65,7 +57,7 @@ if target == "msvc" then
     set_include_paths (include_paths)
     set_libs (libs)
 
-    require_url("https://pastebin.com/raw/K8gige7g") -- Install and set up SDL2
+    require_url("https://pastebin.com/raw/GT9zdiCS") -- Install and set up SDL2
     
     add_linker_flag("/SUBSYSTEM:WINDOWS")
     msvc=true
@@ -76,7 +68,7 @@ if target == "msvc" then
 end
 
 -- Make sure to install SDL2 via your package manager!
-if target == "gcc" then
+if target.find("linux") ~= nil then
     add_lib("SDL2")
     define("linux")
     msvc=false

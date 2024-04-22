@@ -2,11 +2,8 @@
 #include <iostream>
 #include <algorithm>
 
-#ifdef linux
+#define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
-#else
-#include <SDL.h>
-#endif
 
 int main(int argc, char* argv[])
 {

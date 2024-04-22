@@ -7,6 +7,7 @@ use std::path::{PathBuf};
 use std::process::Command;
 use std::ptr::null_mut;
 use anyhow::anyhow;
+use clap::arg;
 
 
 use mlua::Lua;
@@ -32,6 +33,7 @@ pub struct Project {
 
     pub lang: String,
     pub output: String,
+    pub target: String,
 
     pub file: PathBuf,
     pub workspace: PathBuf,
@@ -39,13 +41,11 @@ pub struct Project {
 
     pub files: Vec<PathBuf>,
 
-    pub target: Option<String>,
-    pub configuration: Option<String>,
-    pub arch: Option<String>,
     pub toolset_compiler: Option<String>,
     pub toolset_linker: Option<String>,
 
-    pub msvc: bool,
+    pub arguments: Option<Vec<String>>,
+    pub msvc: Option<bool>,
 }
 
 static mut PTR: *mut Project = null_mut();
@@ -66,8 +66,6 @@ impl Project {
             assets: Vec::new(),
 
             target: args.target.clone(),
-            configuration: args.configuration.clone(),
-            arch: args.arch.clone(),
             toolset_compiler: args.toolset_compiler.clone(),
             toolset_linker: args.toolset_linker.clone(),
             output: args.output.clone(),
@@ -76,7 +74,8 @@ impl Project {
             file: dunce::canonicalize(dunce::canonicalize(&args.workdir)?.join(&args.file))?,
             workspace: dunce::canonicalize(&args.workdir)?.join(".numake"),
 
-            msvc: args.msvc,
+            arguments: args.arguments.clone(),
+            msvc: args.msvc.clone(),
         })
     }
 
@@ -87,19 +86,15 @@ impl Project {
 
         self.lua_instance
             .globals()
+            .set("arguments", self.arguments.clone())?;
+
+        self.lua_instance
+            .globals()
             .set("msvc", self.msvc.clone())?;
 
         self.lua_instance
             .globals()
             .set("target", self.target.clone())?;
-
-        self.lua_instance
-            .globals()
-            .set("configuration", self.configuration.clone())?;
-
-        self.lua_instance
-            .globals()
-            .set("arch", self.arch.clone())?;
 
         self.lua_instance
             .globals()
@@ -314,22 +309,21 @@ impl Project {
         // Parse file
         self.lua_instance
             .load(fs::read_to_string(filepath)?)
-            .exec()
-            .unwrap();
+            .exec()?;
 
         self.toolset_compiler = self.lua_instance.globals().get("toolset_compiler").ok();
         self.toolset_linker = self.lua_instance.globals().get("toolset_linker").ok();
-        self.target = self.lua_instance.globals().get("target").ok();
-        self.arch = self.lua_instance.globals().get("arch").ok();
-        self.configuration = self.lua_instance.globals().get("configuration").ok();
+        self.target = self.lua_instance.globals().get("target")?;
 
         self.output = self.lua_instance.globals().get("output")?;
-        self.msvc = self.lua_instance.globals().get("msvc")?;
+        self.msvc = self.lua_instance.globals().get("msvc").ok();
 
         Ok(())
     }
 
     pub fn build(&mut self) -> anyhow::Result<()> {
+        let msvc: bool = self.msvc.unwrap_or(false);
+
         if self.toolset_compiler == None {
             Err(anyhow!(&NUMAKE_ERROR.TOOLSET_COMPILER_NULL))?
         }
@@ -338,15 +332,8 @@ impl Project {
             Err(anyhow!(&NUMAKE_ERROR.TOOLSET_LINKER_NULL))?
         }
 
-        let config: String = format!(
-            "{}-{}-{}",
-            self.arch.clone().unwrap_or("null".to_string()),
-            self.target.clone().unwrap_or("null".to_string()),
-            self.configuration.clone().unwrap_or("null".to_string())
-        );
-
-        let obj_dir: PathBuf = self.workspace.join(format!("obj/{}", &config));
-        let out_dir: PathBuf = self.workspace.join(format!("out/{}", &config));
+        let obj_dir: PathBuf = self.workspace.join(format!("obj/{}", &self.target));
+        let out_dir: PathBuf = self.workspace.join(format!("out/{}", &self.target));
 
         if !obj_dir.exists() {
             fs::create_dir_all(&obj_dir)?;
@@ -365,12 +352,12 @@ impl Project {
                 "{}/{}.{}",
                 &obj_dir.to_str().unwrap_or("ERROR"),
                 &file.file_name().unwrap_or("ERROR".as_ref()).to_str().unwrap_or("ERROR"),
-                if self.msvc { "obj" } else { "o" }
+                if msvc { "obj" } else { "o" }
             );
 
             let mut compiler_args = Vec::from([
                 "-c".to_string(),
-                if self.msvc {
+                if msvc {
                     format!("-Fo:{}", &o_file)
                 } else {
                     format!("-o{}", &o_file)
@@ -394,7 +381,7 @@ impl Project {
             compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
             println!(
-                "{} exited with {}.",
+                "\n{} exited with {}.\n",
                 self.toolset_compiler.clone().unwrap_or("null".to_string()),
                 compiler
                     .args(&compiler_args)
@@ -404,40 +391,51 @@ impl Project {
         }
 
         let mut linker = Command::new(&self.toolset_linker.clone().unwrap_or("null".to_string()));
-        let mut linker_args = Vec::from(o_files);
+        let mut linker_args = Vec::new();
 
-        for lib in self.libs.clone() {
-            linker_args.push(if self.msvc { lib } else { format!("-l{lib}") })
-        }
+        linker_args.append(&mut o_files);
 
-        if self.msvc {
+        if !msvc {
+
+            for path in self.lib_paths.clone() {
+                linker_args.push(
+                    format!("-L{path}")
+                )
+            }
+
+            for lib in self.libs.clone() {
+                linker_args.push(format!("-l{lib}"))
+            }
+
+
+
+            linker_args.push(format!("-o{}/{}", &out_dir.to_str().unwrap_or("ERROR"), &self.output));
+        } else {
+
+            linker_args.append(&mut self.libs.clone());
+
             linker_args.push("/link".to_string());
-        }
 
-        if self.msvc {
             linker_args.push(format!(
                 "/out:{}/{}",
                 &out_dir.to_str().unwrap_or("ERROR"),
                 &self.output
             ));
-        } else {
-            linker_args.push(format!("-o{}/{}", &out_dir.to_str().unwrap_or("ERROR"), &self.output));
+
+            for path in self.lib_paths.clone() {
+                linker_args.push(
+                    format!("/LIBPATH:{path}")
+                )
+            }
         }
 
         for flag in self.linker_flags.clone() {
             linker_args.push(flag)
         }
 
-        for path in self.lib_paths.clone() {
-            linker_args.push(if self.msvc {
-                format!("/LIBPATH:{path}")
-            } else {
-                format!("-L{path}")
-            })
-        }
 
         println!(
-            "{} exited with {}. ",
+            "\n{} exited with {}. \n",
             self.toolset_linker.clone().unwrap(),
             linker
                 .args(&linker_args)

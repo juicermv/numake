@@ -31,11 +31,7 @@
 #include <iostream>
 #include <algorithm>
 
-#ifdef linux
-#include <SDL2/SDL.h>
-#else
 #include <SDL.h>
-#endif
 
 #define SCREEN_WIDTH    800
 #define SCREEN_HEIGHT   600
