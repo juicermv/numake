@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Run tests
-        run: cargo gcc_build --verbose --target i686-unknown-linux-gnu
+        run: cargo test gcc_build --verbose --target i686-unknown-linux-gnu
 
   build-release-i686-unknown-linux-gnu:
     runs-on: self-hosted
@@ -105,7 +105,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Run tests
-        run: cargo test mingw_build --verbose --target -x86_64-pc-windows-gnu
+        run: cargo test mingw_build --verbose --target x86_64-pc-windows-gnu
 
   build-release-x86_64-pc-windows-gnu:
     runs-on: self-hosted
