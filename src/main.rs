@@ -101,8 +101,7 @@ mod tests {
         proj.process()?;
         proj.build()?;
 
-        let mut test_exec = std::process::Command::new( "wine");
-        test_exec.arg(format!("examples/test/.numake/out/{}/test.exe", env!("TARGET")));
+        let mut test_exec = std::process::Command::new( format!("examples/test/.numake/out/{}/test.exe", env!("TARGET")));
 
         assert_eq!(test_exec.status()?.code(), Some(0));
         Ok(())
