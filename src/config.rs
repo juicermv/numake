@@ -22,19 +22,19 @@ pub struct NuMakeArgs {
     #[arg(long, short)]
     pub arguments: Option<Vec<String>>,
 
-    #[arg(long="compiler", short='c')]
+    #[arg(long = "compiler", short = 'c')]
     pub toolset_compiler: Option<String>,
 
-    #[arg(long="linker", short='l')]
+    #[arg(long = "linker", short = 'l')]
     pub toolset_linker: Option<String>,
 
     #[arg(long, short, default_value = "project.numake")]
     pub file: String,
 
-    #[arg(long, short='o', default_value = "out")]
+    #[arg(long, short = 'o', default_value = "out")]
     pub output: String,
 
-    #[arg(long="working-directory", short='w', default_value = ".")]
+    #[arg(long = "working-directory", short = 'w', default_value = ".")]
     pub workdir: String,
 
     #[arg(long)]

@@ -1,17 +1,14 @@
-use std::{fs, io};
+use std::fs;
 
 use std::io::{BufReader, Read, Write};
 
-
-use std::path::{PathBuf};
+use anyhow::anyhow;
+use std::path::PathBuf;
 use std::process::Command;
 use std::ptr::null_mut;
-use anyhow::anyhow;
-use clap::arg;
 
-
-use mlua::Lua;
 use mlua::prelude::LuaError;
+use mlua::Lua;
 use tempfile::tempfile;
 use uuid::Uuid;
 use zip::ZipArchive;
@@ -88,9 +85,7 @@ impl Project {
             .globals()
             .set("arguments", self.arguments.clone())?;
 
-        self.lua_instance
-            .globals()
-            .set("msvc", self.msvc.clone())?;
+        self.lua_instance.globals().set("msvc", self.msvc.clone())?;
 
         self.lua_instance
             .globals()
@@ -109,200 +104,138 @@ impl Project {
             .set("output", self.output.clone())?;
 
         // Functions
-        self.lua_instance
-            .globals()
-            .set(
-                "add_include_path",
-                self.lua_instance
-                    .create_function_mut(|_, path: String| unsafe {
-                        (*PTR).add_include_path(path.clone())
-                    })?,
-            )?;
+        self.lua_instance.globals().set(
+            "add_include_path",
+            self.lua_instance
+                .create_function_mut(|_, path: String| unsafe {
+                    (*PTR).add_include_path(path.clone())
+                })?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "set_include_paths",
-                self.lua_instance
-                    .create_function_mut(|_, paths: Vec<String>| unsafe {
-                        (*PTR).set_include_paths(paths)
-                    })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "set_include_paths",
+            self.lua_instance
+                .create_function_mut(|_, paths: Vec<String>| unsafe {
+                    (*PTR).set_include_paths(paths)
+                })?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "add_compiler_flag",
-                self.lua_instance
-                    .create_function_mut(|_, flag: String| unsafe {
-                        (*PTR).add_compiler_flag(flag)
-                    })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "add_compiler_flag",
+            self.lua_instance
+                .create_function_mut(|_, flag: String| unsafe { (*PTR).add_compiler_flag(flag) })?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "set_compiler_flags",
-                self.lua_instance
-                    .create_function_mut(|_, flags: Vec<String>| unsafe {
-                        (*PTR).set_compiler_flags(flags)
-                    })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "set_compiler_flags",
+            self.lua_instance
+                .create_function_mut(|_, flags: Vec<String>| unsafe {
+                    (*PTR).set_compiler_flags(flags)
+                })?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "add_linker_flag",
-                self.lua_instance
-                    .create_function_mut(|_, flag: String| unsafe { (*PTR).add_linker_flag(flag) })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "add_linker_flag",
+            self.lua_instance
+                .create_function_mut(|_, flag: String| unsafe { (*PTR).add_linker_flag(flag) })?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "set_linker_flags",
-                self.lua_instance
-                    .create_function_mut(|_, flags: Vec<String>| unsafe {
-                        (*PTR).set_linker_flags(flags)
-                    })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "set_linker_flags",
+            self.lua_instance
+                .create_function_mut(|_, flags: Vec<String>| unsafe {
+                    (*PTR).set_linker_flags(flags)
+                })?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "add_lib_path",
-                self.lua_instance
-                    .create_function_mut(|_, path: String| unsafe { (*PTR).add_lib_path(path) })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "add_lib_path",
+            self.lua_instance
+                .create_function_mut(|_, path: String| unsafe { (*PTR).add_lib_path(path) })?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "set_lib_paths",
-                self.lua_instance
-                    .create_function_mut(|_, paths: Vec<String>| unsafe {
-                        (*PTR).set_lib_paths(paths)
-                    })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "set_lib_paths",
+            self.lua_instance
+                .create_function_mut(|_, paths: Vec<String>| unsafe {
+                    (*PTR).set_lib_paths(paths)
+                })?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "add_lib",
-                self.lua_instance
-                    .create_function_mut(|_, lib: String| unsafe { (*PTR).add_lib(lib) })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "add_lib",
+            self.lua_instance
+                .create_function_mut(|_, lib: String| unsafe { (*PTR).add_lib(lib) })?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "set_libs",
-                self.lua_instance
-                    .create_function_mut(|_, libs: Vec<String>| unsafe { (*PTR).set_libs(libs) })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "set_libs",
+            self.lua_instance
+                .create_function_mut(|_, libs: Vec<String>| unsafe { (*PTR).set_libs(libs) })?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "add_dir",
-                self.lua_instance
-                    .create_function_mut(|_, (path, recursive): (String, bool)| unsafe {
-                        (*PTR).add_dir(
-                            &dunce::canonicalize((*PTR).workdir.join(path)).unwrap(),
-                            recursive,
-                        )
-                    })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "add_dir",
+            self.lua_instance.create_function_mut(
+                |_, (path, recursive): (String, bool)| unsafe {
+                    (*PTR).add_dir(
+                        &dunce::canonicalize((*PTR).workdir.join(path)).unwrap(),
+                        recursive,
+                    )
+                },
+            )?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "add_file",
-                self.lua_instance
-                    .create_function_mut(|_, path: String| unsafe {
-                        (*PTR).add_file(&dunce::canonicalize((*PTR).workdir.join(path))?)
-                    })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "add_file",
+            self.lua_instance
+                .create_function_mut(|_, path: String| unsafe {
+                    (*PTR).add_file(&dunce::canonicalize((*PTR).workdir.join(path))?)
+                })?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "add_asset",
-                self.lua_instance
-                    .create_function_mut(|_, (filepath, newpath): (String, String)| unsafe {
-                        (*PTR).add_asset(filepath, newpath)
-                    })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "add_asset",
+            self.lua_instance.create_function_mut(
+                |_, (filepath, newpath): (String, String)| unsafe {
+                    (*PTR).add_asset(filepath, newpath)
+                },
+            )?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "define",
-                self.lua_instance
-                    .create_function_mut(|_, define: String| unsafe { (*PTR).define(define) })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "define",
+            self.lua_instance
+                .create_function_mut(|_, define: String| unsafe { (*PTR).define(define) })?,
+        )?;
 
-        self.lua_instance
-            .globals()
-            .set(
-                "workspace_download_zip",
-                self.lua_instance
-                    .create_function_mut(|_, url: String| unsafe {
-                        Ok((*PTR).workspace_download_zip(url).unwrap())
-                    })
-                    ?,
-            )
-            ?;
+        self.lua_instance.globals().set(
+            "workspace_download_zip",
+            self.lua_instance
+                .create_function_mut(|_, url: String| unsafe {
+                    Ok((*PTR).workspace_download_zip(url).unwrap())
+                })?,
+        )?;
 
         // Get and require an online numake script, for package management mainly.
-        self.lua_instance
-            .globals()
-            .set(
-                "require_url",
-                self.lua_instance
-                    .create_function_mut(|_, url: String| unsafe { (*PTR).require_url(url) })
-                    ?,
-            )?;
+        self.lua_instance.globals().set(
+            "require_url",
+            self.lua_instance
+                .create_function_mut(|_, url: String| unsafe { (*PTR).require_url(url) })?,
+        )?;
 
         Ok(())
     }
 
-    pub fn process(&mut self) -> anyhow::Result<()>{
+    pub fn process(&mut self) -> anyhow::Result<()> {
         if !self.workspace.exists() {
             fs::create_dir_all(&self.workspace)?;
         }
 
-        let filepath = dunce::canonicalize(
-            self.workdir.join(&self.file)
-        )?;
+        let filepath = dunce::canonicalize(self.workdir.join(&self.file))?;
 
-        if !filepath.starts_with(&self.workdir) { // Throw error if file is outside working directory
+        if !filepath.starts_with(&self.workdir) {
+            // Throw error if file is outside working directory
             Err(anyhow!(&NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
         }
 
@@ -346,12 +279,17 @@ impl Project {
         let mut o_files: Vec<String> = Vec::new(); // Can't assume all compilers support wildcards.
 
         for file in self.files.clone() {
-            let mut compiler = Command::new(&self.toolset_compiler.clone().unwrap_or("null".to_string()));
+            let mut compiler =
+                Command::new(&self.toolset_compiler.clone().unwrap_or("null".to_string()));
 
             let o_file = format!(
                 "{}/{}.{}",
                 &obj_dir.to_str().unwrap_or("ERROR"),
-                &file.file_name().unwrap_or("ERROR".as_ref()).to_str().unwrap_or("ERROR"),
+                &file
+                    .file_name()
+                    .unwrap_or("ERROR".as_ref())
+                    .to_str()
+                    .unwrap_or("ERROR"),
                 if msvc { "obj" } else { "o" }
             );
 
@@ -396,22 +334,20 @@ impl Project {
         linker_args.append(&mut o_files);
 
         if !msvc {
-
             for path in self.lib_paths.clone() {
-                linker_args.push(
-                    format!("-L{path}")
-                )
+                linker_args.push(format!("-L{path}"))
             }
 
             for lib in self.libs.clone() {
                 linker_args.push(format!("-l{lib}"))
             }
 
-
-
-            linker_args.push(format!("-o{}/{}", &out_dir.to_str().unwrap_or("ERROR"), &self.output));
+            linker_args.push(format!(
+                "-o{}/{}",
+                &out_dir.to_str().unwrap_or("ERROR"),
+                &self.output
+            ));
         } else {
-
             linker_args.append(&mut self.libs.clone());
 
             linker_args.push("/link".to_string());
@@ -423,16 +359,13 @@ impl Project {
             ));
 
             for path in self.lib_paths.clone() {
-                linker_args.push(
-                    format!("/LIBPATH:{path}")
-                )
+                linker_args.push(format!("/LIBPATH:{path}"))
             }
         }
 
         for flag in self.linker_flags.clone() {
             linker_args.push(flag)
         }
-
 
         println!(
             "\n{} exited with {}. \n",
@@ -470,10 +403,11 @@ impl Project {
             let ok_response = response.ok().unwrap();
             if ok_response.status().is_success() {
                 let buf: [u8; 16] = *url.as_bytes().last_chunk::<16>().unwrap();
-                let path = format!( // Where the archive will be extracted.
-                                    "{}/remote/{}",
-                                    self.workspace.to_str().unwrap_or("ERROR"),
-                                    Uuid::new_v8(buf)
+                let path = format!(
+                    // Where the archive will be extracted.
+                    "{}/remote/{}",
+                    self.workspace.to_str().unwrap_or("ERROR"),
+                    Uuid::new_v8(buf)
                 );
                 if fs::metadata(&path).is_err() {
                     // Don't "download" again. (data already in memory)
@@ -595,8 +529,7 @@ impl Project {
             Err(LuaError::runtime(&NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
         }
 
-        if file.is_file()
-        {
+        if file.is_file() {
             self.files.push(file.clone());
             Ok(())
         } else {
