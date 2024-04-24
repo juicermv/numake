@@ -5,6 +5,6 @@ fn main()
 		std::env::var("TARGET").unwrap()
 	);
 
-	println!("cargo:rustc-env=RUST_BACKTRACE=1")
-	println!("cargo:rustc-env=MIRIFLAGS=-Zmiri-disable-isolation")
+	println!("cargo:rustc-env=RUST_BACKTRACE=1");
+	println!("cargo:rustc-env=MIRIFLAGS=-Zmiri-disable-isolation");
 }
