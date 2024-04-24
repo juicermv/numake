@@ -65,8 +65,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Miri
+        run: |
+          rustup toolchain install nightly --component miri
+          rustup override set nightly
+          cargo miri setup
+
       - name: Run tests
-        run: cargo test mingw_build --verbose --target x86_64-pc-windows-gnu -- --nocapture
+        run: cargo miri test mingw_build --verbose
 
   build-release-x86_64-pc-windows-gnu:
     runs-on: self-hosted
