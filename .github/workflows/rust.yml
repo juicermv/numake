@@ -72,7 +72,7 @@ jobs:
           cargo miri setup
 
       - name: Run tests
-        run: cargo miri test mingw_build --verbose -Zmiri-disable-isolation
+        run: cargo miri test mingw_build --verbose
 
   build-release-x86_64-pc-windows-gnu:
     runs-on: self-hosted
