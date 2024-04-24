@@ -11,12 +11,13 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Subcommands {
     Build(NuMakeArgs),
-    Inspect(NuMakeArgs),
+    //Inspect(NuMakeArgs),
+    List(ListArgs),
 }
 
 #[derive(Args)]
 pub struct NuMakeArgs {
-    #[arg(default_value = env!("TARGET"))]
+    #[arg()]
     pub target: String,
 
     #[arg(long, short)]
@@ -28,15 +29,24 @@ pub struct NuMakeArgs {
     #[arg(long = "linker", short = 'l')]
     pub toolset_linker: Option<String>,
 
-    #[arg(long, short, default_value = "project.numake")]
+    #[arg(long, short, default_value = "project.lua")]
     pub file: String,
 
-    #[arg(long, short = 'o', default_value = "out")]
-    pub output: String,
+    #[arg(long, short = 'o')]
+    pub output: Option<String>,
 
     #[arg(long = "working-directory", short = 'w', default_value = ".")]
     pub workdir: String,
 
     #[arg(long)]
-    pub msvc: Option<bool>,
+    pub msvc: bool,
+}
+
+#[derive(Args)]
+pub struct ListArgs {
+    #[arg(long, short, default_value = "project.lua")]
+    pub file: String,
+
+    #[arg(long = "working-directory", short = 'w', default_value = ".")]
+    pub workdir: String,
 }

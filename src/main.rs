@@ -5,44 +5,43 @@
 */
 
 use crate::config::{Cli, Subcommands};
-use crate::numake_file::Project;
+use crate::lua_file::LuaFile;
 use clap::Parser;
-use std::io;
-use std::io::Write;
+use mlua::Lua;
 use std::time::SystemTime;
 
 mod config;
 mod error;
-mod numake_file;
+mod lua_file;
+mod target;
 
 #[cfg(not(test))]
 fn main() -> anyhow::Result<()> {
-    let now = SystemTime::now();
-
     let cli = Cli::parse();
+    let lua = Lua::new();
+    lua.enable_jit(true);
+    lua.sandbox(true)?;
+
     match &cli.command {
         Subcommands::Build(args) => {
-            let mut proj = Project::new(args)?;
-            proj.setup_lua_vals()?;
-            proj.process()?;
+            let mut proj = LuaFile::new(args)?;
+            proj.process(&lua)?;
+            let now = SystemTime::now();
+            println!("Building target {}...", &args.target);
             proj.build()?;
-            println!("\n\nNuMake done in {}ms!", now.elapsed()?.as_millis());
+            println!(
+                "\n\nBuilding target {} done in {}ms!",
+                &args.target,
+                now.elapsed()?.as_millis()
+            );
         }
 
-        Subcommands::Inspect(args) => {
-            let mut proj = Project::new(args)?;
-            proj.setup_lua_vals()?;
-            proj.process()?;
-            io::stdout().write_all(
-                format!(
-                    "{{\n\t'include': \n\t[ {} \n\t]\n}}",
-                    proj.include_paths
-                        .into_iter()
-                        .map(|item| { format!("\n\t\t'{}', ", item) })
-                        .collect::<String>()
-                )
-                .as_bytes(),
-            )?
+        //Subcommands::Inspect(_) => {}
+
+        Subcommands::List(args) => {
+            let mut proj = LuaFile::new_dummy(args)?;
+            proj.process(&lua)?;
+            println!("{}", proj.list_targets()?);
         }
     }
 
@@ -52,31 +51,27 @@ fn main() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use crate::config::NuMakeArgs;
-    use crate::numake_file::Project;
-    use std::env;
+    use crate::lua_file::LuaFile;
+    use mlua::Lua;
 
     #[test]
     fn gcc_build() -> anyhow::Result<()> {
         let args: NuMakeArgs = NuMakeArgs {
-            target: env!("TARGET").to_string().to_string(),
+            target: "gcc".to_string(),
             toolset_compiler: None,
             toolset_linker: None,
-            file: "test.numake".to_string(),
-            output: "test".to_string(),
+            file: "test.lua".to_string(),
+            output: None,
             workdir: "examples/test".to_string(),
-            msvc: None,
-            arguments: None,
+            msvc: false,
+            arguments: Some(vec![]),
         };
 
-        let mut proj = Project::new(&args)?;
-        proj.setup_lua_vals()?;
-        proj.process()?;
+        let mut proj = LuaFile::new(&args)?;
+        proj.process(&Lua::new())?;
         proj.build()?;
 
-        let mut test_exec = std::process::Command::new(format!(
-            "examples/test/.numake/out/{}/test",
-            env!("TARGET")
-        ));
+        let mut test_exec = std::process::Command::new("examples/test/.numake/out/gcc/test");
         assert_eq!(test_exec.status()?.code(), Some(0));
         Ok(())
     }
@@ -84,25 +79,21 @@ mod tests {
     #[test]
     fn mingw_build() -> anyhow::Result<()> {
         let args: NuMakeArgs = NuMakeArgs {
-            target: env!("TARGET").to_string().to_string(),
+            target: "mingw".to_string(),
             toolset_compiler: None,
             toolset_linker: None,
-            file: "test.numake".to_string(),
-            output: "".to_string(),
+            file: "test.lua".to_string(),
+            output: None,
             workdir: "examples/test".to_string(),
-            msvc: None,
-            arguments: Some(Vec::from(["mingw".to_string()])),
+            msvc: false,
+            arguments: Some(vec![]),
         };
 
-        let mut proj = Project::new(&args)?;
-        proj.setup_lua_vals()?;
-        proj.process()?;
+        let mut proj = LuaFile::new(&args)?;
+        proj.process(&Lua::new())?;
         proj.build()?;
 
-        let mut test_exec = std::process::Command::new(format!(
-            "examples/test/.numake/out/{}/test.exe",
-            env!("TARGET")
-        ));
+        let mut test_exec = std::process::Command::new("examples/test/.numake/out/mingw/test.exe");
 
         assert_eq!(test_exec.status()?.code(), Some(0));
         Ok(())
