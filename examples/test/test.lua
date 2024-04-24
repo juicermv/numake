@@ -39,6 +39,8 @@ gcc.output = "test"
 gcc.libraries = {
     "SDL2"
 }
+gcc.compiler = "g++"
+gcc.linker = gcc.compiler
 
 gcc:add_dir("src")
 
