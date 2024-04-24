@@ -65,6 +65,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install & use stable-x86_64-pc-windows-gnu toolchain
+        run: |
+          rustup toolchain install stable-x86_64-pc-windows-gnu
+          rustup default stable-x86_64-pc-windows-gnu
+
       - name: Run tests
         run: cargo test mingw_build --verbose -- --nocapture
 
