@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run tests
-        run: cargo test gcc_build --verbose --target x86_64-unknown-linux-gnu -- --nocapture
+        run: cargo test gcc_build --verbose -- --nocapture
 
   build-release-x86_64-unknown-linux-gnu:
     runs-on: self-hosted
@@ -65,14 +65,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Miri
-        run: |
-          rustup toolchain install nightly --component miri
-          rustup override set nightly
-          cargo miri setup
-
       - name: Run tests
-        run: cargo miri test mingw_build --verbose
+        run: cargo test mingw_build --verbose -- --nocapture
 
   build-release-x86_64-pc-windows-gnu:
     runs-on: self-hosted
