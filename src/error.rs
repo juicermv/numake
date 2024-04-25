@@ -8,6 +8,8 @@ pub struct NuMakeErrorType<'a>
 	pub TOOLSET_LINKER_NULL: &'a str,
 	pub ADD_FILE_IS_DIRECTORY: &'a str,
 	pub TARGET_NOT_FOUND: &'a str,
+	pub MSVC_WINDOWS_ONLY: &'a str,
+	pub VC_NOT_FOUND: &'a str
 }
 
 pub const NUMAKE_ERROR: NuMakeErrorType<'static> = NuMakeErrorType {
@@ -16,6 +18,8 @@ pub const NUMAKE_ERROR: NuMakeErrorType<'static> = NuMakeErrorType {
 	TOOLSET_LINKER_NULL: "No linker specified/found!",
 	ADD_FILE_IS_DIRECTORY: "Attempted to add_file with a directory path! Use add_dir instead!",
 	TARGET_NOT_FOUND: "Target not found!",
+	MSVC_WINDOWS_ONLY: "MSVC targets can only be compiled on windows!",
+	VC_NOT_FOUND: "Visual C/C++ installation not found! Make sure you have Visual Studio/Build Tools installed!",
 };
 
 pub fn to_lua_result<T>(val: anyhow::Result<T>) -> mlua::Result<T>

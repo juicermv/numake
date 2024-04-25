@@ -31,7 +31,11 @@
 #include <iostream>
 #include <algorithm>
 
-#include <SDL2/SDL.h>
+#ifdef MSVC
+    #include <SDL.h>
+#else
+    #include <SDL2/SDL.h>
+#endif
 
 #define SCREEN_WIDTH    800
 #define SCREEN_HEIGHT   600

@@ -44,9 +44,6 @@ pub struct NuMakeArgs
 
 	#[arg(long = "working-directory", short = 'w', default_value = ".")]
 	pub workdir: String,
-
-	#[arg(long)]
-	pub msvc: bool,
 }
 
 #[derive(Args)]

@@ -12,3 +12,4 @@ reorder_impl_items = true
 group_imports = "StdExternalCrate"
 spaces_around_ranges = true
 struct_lit_single_line = false
+max_width = 80

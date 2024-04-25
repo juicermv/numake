@@ -11,7 +11,7 @@ mingw.include_paths = {sdl_path .. "/include"}
 mingw.library_paths = {sdl_path .. "/lib"}
 mingw.libraries = {
     "mingw32",
-    "SDL2",
+    "SDL2.dll",
     "SDL2main",
     "m",
     "dinput8",

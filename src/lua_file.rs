@@ -5,9 +5,12 @@ use std::{
 		BufReader,
 		Write,
 	},
-	path::PathBuf,
-	process::Command,
+	path::{
+		Path,
+		PathBuf,
+	},
 	str::FromStr,
+	time::SystemTime,
 };
 
 use anyhow::anyhow;
@@ -30,8 +33,8 @@ use crate::{
 		NuMakeArgs,
 	},
 	error::{
-		to_lua_result,
 		NUMAKE_ERROR,
+		to_lua_result,
 	},
 	target::Target,
 };
@@ -42,26 +45,25 @@ pub struct LuaFile
 	targets: HashMap<String, Target>,
 
 	file: PathBuf,
-	workspace: PathBuf,
-	workdir: PathBuf, // Should already exist
+	pub(crate) workspace: PathBuf,
+	pub(crate) workdir: PathBuf, // Should already exist
 
 	target: String,
-	output: Option<String>,
+	pub(crate) output: Option<String>,
 
-	toolset_compiler: Option<String>,
-	toolset_linker: Option<String>,
+	pub(crate) toolset_compiler: Option<String>,
+	pub(crate) toolset_linker: Option<String>,
 
 	arguments: Vec<String>,
-	msvc: bool,
-
-	lua_compiler: Compiler,
 }
 
 impl UserData for LuaFile
 {
 	fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F)
 	{
-		fields.add_field_method_get("arguments", |_, this| Ok(this.arguments.clone()));
+		fields.add_field_method_get("arguments", |_, this| {
+			Ok(this.arguments.clone())
+		});
 	}
 
 	fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M)
@@ -71,9 +73,20 @@ impl UserData for LuaFile
 				name.clone(),
 				this.toolset_compiler.clone(),
 				this.toolset_linker.clone(),
-				this.msvc.clone(),
 				this.output.clone(),
 				this.workdir.clone(),
+				false,
+			))
+		});
+
+		methods.add_method("create_msvc_target", |_, this, name: String| {
+			to_lua_result(Target::new(
+				name.clone(),
+				None,
+				None,
+				this.output.clone(),
+				this.workdir.clone(),
+				true,
 			))
 		});
 
@@ -99,7 +112,9 @@ impl<'lua> FromLua<'lua> for LuaFile
 	) -> mlua::Result<Self>
 	{
 		match value {
-			Value::UserData(user_data) => Ok(user_data.borrow::<Self>()?.clone()),
+			Value::UserData(user_data) => {
+				Ok(user_data.borrow::<Self>()?.clone())
+			}
 			_ => unreachable!(),
 		}
 	}
@@ -112,7 +127,9 @@ impl LuaFile
 		Ok(LuaFile {
 			targets: HashMap::new(),
 			workdir: dunce::canonicalize(&args.workdir)?,
-			file: dunce::canonicalize(dunce::canonicalize(&args.workdir)?.join(&args.file))?,
+			file: dunce::canonicalize(
+				dunce::canonicalize(&args.workdir)?.join(&args.file),
+			)?,
 			workspace: dunce::canonicalize(&args.workdir)?.join(".numake"),
 			target: args.target.clone(),
 			toolset_compiler: args.toolset_compiler.clone(),
@@ -120,9 +137,6 @@ impl LuaFile
 			output: args.output.clone(),
 
 			arguments: args.arguments.clone().unwrap_or(vec![]),
-			msvc: args.msvc.clone(),
-
-			lua_compiler: Compiler::new().set_debug_level(2).set_coverage_level(2),
 		})
 	}
 
@@ -131,7 +145,9 @@ impl LuaFile
 		Ok(LuaFile {
 			targets: HashMap::new(),
 			workdir: dunce::canonicalize(&args.workdir)?,
-			file: dunce::canonicalize(dunce::canonicalize(&args.workdir)?.join(&args.file))?,
+			file: dunce::canonicalize(
+				dunce::canonicalize(&args.workdir)?.join(&args.file),
+			)?,
 			workspace: dunce::canonicalize(&args.workdir)?.join(".numake"),
 			target: "".to_string(),
 			toolset_compiler: None,
@@ -139,9 +155,6 @@ impl LuaFile
 			output: None,
 
 			arguments: vec![],
-			msvc: false,
-
-			lua_compiler: Compiler::new().set_debug_level(2).set_coverage_level(2),
 		})
 	}
 
@@ -150,7 +163,10 @@ impl LuaFile
 		lua_state: &Lua,
 	) -> anyhow::Result<()>
 	{
-		lua_state.set_compiler(self.lua_compiler.clone());
+		let now = SystemTime::now();
+		lua_state.set_compiler(
+			Compiler::new().set_debug_level(2).set_coverage_level(2).set_optimization_level(0)
+		);
 
 		if !self.workspace.exists() {
 			fs::create_dir_all(&self.workspace)?;
@@ -186,12 +202,14 @@ impl LuaFile
 			fs::write(&cache_toml, "")?;
 		}
 
-		let mut table = toml::Table::from_str(&*fs::read_to_string(&cache_toml)?)?;
+		let mut table =
+			toml::Table::from_str(&fs::read_to_string(&cache_toml)?)?;
 		if !table.contains_key(&file_uuid) {
 			table.insert(file_uuid.clone(), file_size_toml.clone());
 		}
 
-		let file_cache = cache_dir.join(format!("{}.{}", &file_uuid, "nucache"));
+		let file_cache =
+			cache_dir.join(format!("{}.{}", &file_uuid, "nucache"));
 
 		if table[&file_uuid] == file_size_toml && file_cache.exists() {
 			lua_state
@@ -199,33 +217,40 @@ impl LuaFile
 				.set_name(self.file.file_name().unwrap().to_str().unwrap())
 				.exec()?;
 		} else if table[&file_uuid] != file_size_toml || !file_cache.exists() {
-			let file_content = fs::read_to_string(&self.file)?;
-			let result = lua_state
+			let file_content = fs::read(&self.file)?;
+
+			lua_state
 				.load(&file_content)
 				.set_name(self.file.file_name().unwrap().to_str().unwrap())
-				.exec();
-			if result.is_ok() {
-				fs::write(&file_cache, self.lua_compiler.compile(&file_content))?;
-				table[&file_uuid] = file_size_toml.clone();
-				fs::write(&cache_toml, table.to_string())?;
-			} else {
-				Err(result.err().unwrap())?;
-			}
+				.exec()?;
+
+			fs::write(
+				&file_cache,
+				Compiler::new()
+					.set_debug_level(0)
+					.set_optimization_level(2)
+					.set_coverage_level(2)
+					.compile(&file_content),
+			)?;
+
+			table[&file_uuid] = file_size_toml.clone();
+			fs::write(&cache_toml, table.to_string())?;
 		}
 
 		let lua_workspace: Self = lua_state.globals().get("workspace")?;
 		self.targets = lua_workspace.targets.clone();
+
+		println!(
+			"Processing script done in {}ms!",
+			now.elapsed()?.as_millis()
+		);
 
 		Ok(())
 	}
 
 	pub fn list_targets(&self) -> anyhow::Result<String>
 	{
-		Ok(self
-			.targets
-			.iter()
-			.map(|(name, _)| name.clone() + " ")
-			.collect())
+		Ok(self.targets.keys().map(|name| name.clone() + " ").collect())
 	}
 
 	pub fn build(&mut self) -> anyhow::Result<()>
@@ -245,165 +270,20 @@ impl LuaFile
 		_target: &String,
 	) -> anyhow::Result<()>
 	{
-		if self.targets.get(_target).is_none() {
-			Err(anyhow!(&NUMAKE_ERROR.TARGET_NOT_FOUND))?
-		}
-
-		let target_obj = self.targets.get(&self.target).unwrap();
-
-		let obj_dir: PathBuf = self.workspace.join(format!("obj/{}", &self.target));
-		let out_dir: PathBuf = self.workspace.join(format!("out/{}", &self.target));
-
-		if !obj_dir.exists() {
-			fs::create_dir_all(&obj_dir)?;
-		}
-
-		if !out_dir.exists() {
-			fs::create_dir_all(&out_dir)?;
-		}
-
-		let mut o_files: Vec<String> = Vec::new(); // Can't assume all compilers support wildcards.
-
-		let toolset_compiler: Option<String> = if self.toolset_compiler.is_none() {
-			target_obj.toolset_compiler.clone()
+		if !self.targets.contains_key(_target) {
+			Err(anyhow!(&NUMAKE_ERROR.TARGET_NOT_FOUND))
 		} else {
-			self.toolset_compiler.clone()
-		};
-
-		let toolset_linker: Option<String> = if self.toolset_linker.is_none() {
-			target_obj.toolset_linker.clone()
-		} else {
-			self.toolset_linker.clone()
-		};
-
-		let output: Option<String> = if self.output.is_none() {
-			target_obj.output.clone()
-		} else {
-			self.output.clone()
-		};
-
-		if toolset_linker == None {
-			Err(anyhow!(&NUMAKE_ERROR.TOOLSET_LINKER_NULL))?
-		}
-
-		if toolset_compiler == None {
-			Err(anyhow!(&NUMAKE_ERROR.TOOLSET_LINKER_NULL))?
-		}
-
-		for file in target_obj.files.clone() {
-			let mut compiler = Command::new(toolset_compiler.clone().unwrap_or("NULL".to_string()));
-
-			let o_file = format!(
-				"{}/{}.{}",
-				&obj_dir.to_str().unwrap_or("ERROR"),
-				&file
-					.file_name()
-					.unwrap_or("ERROR".as_ref())
-					.to_str()
-					.unwrap_or("ERROR"),
-				if target_obj.msvc { "obj" } else { "o" }
-			);
-
-			let mut compiler_args = Vec::from([
-				"-c".to_string(),
-				if target_obj.msvc {
-					format!("-Fo:{}", &o_file)
-				} else {
-					format!("-o{}", &o_file)
-				},
-			]);
-
-			o_files.push(o_file);
-
-			for incl in target_obj.include_paths.clone() {
-				compiler_args.push(format!("-I{incl}"))
-			}
-
-			for define in target_obj.defines.clone() {
-				compiler_args.push(format!("-D{define}"))
-			}
-
-			for flag in target_obj.compiler_flags.clone() {
-				compiler_args.push(flag)
-			}
-
-			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
-
+			println!("Selecting target {}...", _target);
+			println!("Building target {}...", _target);
+			let now = SystemTime::now();
+			self.targets.get(_target).unwrap().build(self)?;
 			println!(
-				"\n{} exited with {}.\n",
-				toolset_compiler.clone().unwrap_or("NULL".to_string()),
-				compiler
-					.args(&compiler_args)
-					.current_dir(&self.workdir)
-					.status()?
+				"Building target {} done in {}ms!",
+				_target,
+				now.elapsed()?.as_millis()
 			);
+			Ok(())
 		}
-
-		let mut linker = Command::new(toolset_linker.clone().unwrap_or("NULL".to_string()));
-		let mut linker_args = Vec::new();
-
-		linker_args.append(&mut o_files);
-
-		if !target_obj.msvc {
-			for path in target_obj.lib_paths.clone() {
-				linker_args.push(format!("-L{path}"))
-			}
-
-			for lib in target_obj.libs.clone() {
-				linker_args.push(format!("-l{lib}"))
-			}
-
-			linker_args.push(format!(
-				"-o{}/{}",
-				&out_dir.to_str().unwrap_or("ERROR"),
-				&output.unwrap_or("out".to_string())
-			));
-		} else {
-			linker_args.append(&mut target_obj.libs.clone());
-
-			linker_args.push("/link".to_string());
-
-			linker_args.push(format!(
-				"/out:{}/{}",
-				&out_dir.to_str().unwrap_or("ERROR"),
-				&output.unwrap_or("out".to_string())
-			));
-
-			for path in target_obj.lib_paths.clone() {
-				linker_args.push(format!("/LIBPATH:{path}"))
-			}
-		}
-
-		for flag in target_obj.linker_flags.clone() {
-			linker_args.push(flag)
-		}
-
-		println!(
-			"\n{} exited with {}. \n",
-			toolset_linker.clone().unwrap_or("NULL".to_string()),
-			linker
-				.args(&linker_args)
-				.current_dir(&self.workdir)
-				.status()?
-		);
-
-		for (oldpath, newpath) in target_obj.assets.clone() {
-			let old_path = PathBuf::from(&oldpath); // Already canonicalized and validated.
-			let new_path = out_dir.join(&newpath); // Needs to be validated during build, and so we do.
-
-			if new_path.starts_with(&out_dir) {
-				// Make sure we haven't escaped our output dir
-				fs::copy(old_path, new_path)?;
-			} else {
-				Err(anyhow!(format!(
-					"Asset file '{}' copied to invalid destination! ({})",
-					old_path.to_str().unwrap_or("ERROR"),
-					new_path.to_str().unwrap_or("ERROR")
-				)))?
-			}
-		}
-
-		Ok(())
 	}
 
 	fn require_url(
@@ -412,15 +292,19 @@ impl LuaFile
 		url: String,
 	) -> anyhow::Result<()>
 	{
-		let file_uuid = Uuid::new_v8(*url.as_bytes().last_chunk::<16>().unwrap()).to_string();
+		let file_uuid =
+			Uuid::new_v8(*url.as_bytes().last_chunk::<16>().unwrap())
+				.to_string();
 		let cache_dir = self.workspace.join("cache");
 		let cache_toml = cache_dir.join("cache.toml");
 		if !cache_toml.exists() {
 			fs::write(&cache_toml, format!("{}=\"-1\"", &file_uuid))?;
 		}
 
-		let mut table = toml::Table::from_str(&*fs::read_to_string(&cache_toml)?)?;
-		let file_cache = cache_dir.join(format!("{}.{}", &file_uuid, "nucache"));
+		let mut table =
+			toml::Table::from_str(&*fs::read_to_string(&cache_toml)?)?;
+		let file_cache =
+			cache_dir.join(format!("{}.{}", &file_uuid, "nucache"));
 
 		let response = reqwest::blocking::get(&url)?;
 		if !response.status().is_success() {
@@ -444,11 +328,21 @@ impl LuaFile
 					.load(fs::read(&file_cache)?)
 					.set_name(&url)
 					.exec()?)
-			} else if table[&file_uuid] != file_size_toml || !file_cache.exists() {
+			} else if table[&file_uuid] != file_size_toml
+				|| !file_cache.exists()
+			{
 				let file_content = response.text()?;
-				let result = lua_state.load(&file_content).set_name(&url).eval();
+				let result =
+					lua_state.load(&file_content).set_name(&url).eval();
 				if result.is_ok() {
-					fs::write(&file_cache, self.lua_compiler.compile(&file_content))?;
+					fs::write(
+						&file_cache,
+						Compiler::new()
+							.set_debug_level(0)
+							.set_optimization_level(2)
+							.set_coverage_level(2)
+							.compile(&file_content),
+					)?;
 					table[&file_uuid] = file_size_toml;
 					fs::write(&cache_toml, table.to_string())?;
 					Ok(result.ok().unwrap())
@@ -466,32 +360,28 @@ impl LuaFile
 		url: String,
 	) -> anyhow::Result<String>
 	{
-		let response = reqwest::blocking::get(&url);
-		if response.is_err() {
-			Err(response.err().unwrap())? // Convert error to mlua error
-		} else {
-			let ok_response = response.ok().unwrap();
-			if ok_response.status().is_success() {
-				let buf: [u8; 16] = *url.as_bytes().last_chunk::<16>().unwrap();
-				let path = format!(
-					// Where the archive will be extracted.
-					"{}/remote/{}",
-					self.workspace.to_str().unwrap_or("ERROR"),
-					Uuid::new_v8(buf)
-				);
+		let path_str: String = format!(
+			// Where the archive will be extracted.
+			"{}/remote/{}",
+			self.workspace.to_str().unwrap_or("ERROR"),
+			Uuid::new_v8(*url.as_bytes().last_chunk::<16>().unwrap())
+		);
 
-				if fs::metadata(&path).is_err() {
-					// Don't "download" again. (data already in memory)
-					let bytes = ok_response.bytes();
-					fs::create_dir_all(&path)?;
-					let path_buf = dunce::canonicalize(&path)?;
-					let mut tempfile = tempfile()?; // Create a tempfile as a buffer for our response bytes because nothing else implements Seek ffs
-					tempfile.write_all(bytes.unwrap().as_ref())?;
-					ZipArchive::new(BufReader::new(tempfile))?.extract(&path_buf)?;
-				}
-				Ok(path) // Return path if already exists
+		let path = Path::new(&path_str);
+
+		if path.exists() && path.is_dir() && path.metadata()?.len() > 0 {
+			Ok(path.to_str().unwrap().to_string())
+		} else {
+			let response = reqwest::blocking::get(&url)?;
+			if response.status().is_success() {
+				let bytes = response.bytes()?;
+				fs::create_dir_all(&path)?;
+				let mut tempfile = tempfile()?; // Create a tempfile as a buffer for our response bytes because nothing else implements Seek ffs
+				tempfile.write_all(bytes.as_ref())?;
+				ZipArchive::new(BufReader::new(tempfile))?.extract(path)?;
+				Ok(path.to_str().unwrap().to_string())
 			} else {
-				Err(anyhow!(ok_response.status()))?
+				Err(anyhow!(response.status()))?
 			}
 		}
 	}
