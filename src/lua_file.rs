@@ -165,7 +165,10 @@ impl LuaFile
 	{
 		let now = SystemTime::now();
 		lua_state.set_compiler(
-			Compiler::new().set_debug_level(2).set_coverage_level(2).set_optimization_level(0)
+			Compiler::new()
+				.set_debug_level(2)
+				.set_coverage_level(2)
+				.set_optimization_level(0),
 		);
 
 		if !self.workspace.exists() {

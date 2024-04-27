@@ -12,10 +12,10 @@ use std::{
 
 use anyhow::anyhow;
 use mlua::{
-	prelude::LuaError,
 	Error,
 	FromLua,
 	Lua,
+	prelude::LuaError,
 	Table,
 	UserData,
 	UserDataFields,
@@ -27,8 +27,8 @@ use tempfile::tempdir;
 
 use crate::{
 	error::{
-		to_lua_result,
 		NUMAKE_ERROR,
+		to_lua_result,
 	},
 	lua_file::LuaFile,
 };
@@ -97,13 +97,13 @@ impl Target
 	) -> anyhow::Result<()>
 	{
 		if !file.starts_with(&self.workdir) {
-			Err(mlua::Error::runtime(&NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
+			Err(mlua::Error::runtime(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
 		}
 
 		if file.is_file() {
 			self.files.push(file.clone());
 		} else {
-			Err(mlua::Error::runtime(&NUMAKE_ERROR.ADD_FILE_IS_DIRECTORY))?
+			Err(mlua::Error::runtime(NUMAKE_ERROR.ADD_FILE_IS_DIRECTORY))?
 		}
 		Ok(())
 	}
@@ -112,11 +112,11 @@ impl Target
 		&mut self,
 		path_buf: PathBuf,
 		recursive: bool,
-		filter: &Option<Vec<String>>
+		filter: &Option<Vec<String>>,
 	) -> anyhow::Result<()>
 	{
 		if !path_buf.starts_with(&self.workdir) {
-			Err(LuaError::runtime(&NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
+			Err(LuaError::runtime(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
 		}
 
 		for entry in fs::read_dir(path_buf)? {
@@ -125,8 +125,16 @@ impl Target
 				self.add_dir(path.clone(), true, filter)?
 			}
 			if path.is_file() {
-				if !filter.is_none() && filter.clone().unwrap().contains(&path.extension().unwrap_or("".as_ref()).to_str().unwrap().to_string()) {
-					continue
+				if !filter.is_none()
+					&& filter.clone().unwrap().contains(
+						&path
+							.extension()
+							.unwrap_or("".as_ref())
+							.to_str()
+							.unwrap()
+							.to_string(),
+					) {
+					continue;
 				}
 				self.add_file(path.clone())?
 			}
@@ -555,7 +563,10 @@ impl UserData for Target
 
 			fields.add_field_method_set(
 				"include_paths",
-				|_, this, val: Vec<String>| Ok(this.include_paths = val),
+				|_, this, val: Vec<String>| {
+					this.include_paths = val;
+					Ok(())
+				},
 			);
 		}
 
@@ -566,7 +577,10 @@ impl UserData for Target
 
 			fields.add_field_method_set(
 				"library_paths",
-				|_, this, val: Vec<String>| Ok(this.lib_paths = val),
+				|_, this, val: Vec<String>| {
+					this.lib_paths = val;
+					Ok(())
+				},
 			);
 		}
 
@@ -577,7 +591,10 @@ impl UserData for Target
 
 			fields.add_field_method_set(
 				"libraries",
-				|_, this, val: Vec<String>| Ok(this.libs = val),
+				|_, this, val: Vec<String>| {
+					this.libs = val;
+					Ok(())
+				},
 			);
 		}
 
@@ -588,7 +605,10 @@ impl UserData for Target
 
 			fields.add_field_method_set(
 				"definitions",
-				|_, this, val: Vec<String>| Ok(this.defines = val),
+				|_, this, val: Vec<String>| {
+					this.defines = val;
+					Ok(())
+				},
 			);
 		}
 
@@ -647,7 +667,10 @@ impl UserData for Target
 
 			fields.add_field_method_set(
 				"output",
-				|_, this, val: Option<String>| Ok(this.output = val),
+				|_, this, val: Option<String>| {
+					this.output = val;
+					Ok(())
+				},
 			);
 		}
 
@@ -658,7 +681,10 @@ impl UserData for Target
 
 			fields.add_field_method_set(
 				"compiler_flags",
-				|_, this, val: Vec<String>| Ok(this.compiler_flags = val),
+				|_, this, val: Vec<String>| {
+					this.compiler_flags = val;
+					Ok(())
+				},
 			);
 		}
 
@@ -669,7 +695,10 @@ impl UserData for Target
 
 			fields.add_field_method_set(
 				"linker_flags",
-				|_, this, val: Vec<String>| Ok(this.linker_flags = val),
+				|_, this, val: Vec<String>| {
+					this.linker_flags = val;
+					Ok(())
+				},
 			);
 		}
 
@@ -738,7 +767,7 @@ impl UserData for Target
 						&dunce::canonicalize(this.workdir.join(&old_path))?; // Will automatically error if path doesn't exist.
 					if !path.starts_with(&this.workdir) {
 						Err(mlua::Error::runtime(
-							&NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR,
+							NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR,
 						))?
 					}
 
@@ -753,11 +782,13 @@ impl UserData for Target
 	{
 		methods.add_method_mut(
 			"add_dir",
-			|_, this, (path, recursive, filter): (String, bool, Option<Vec<String>>)| {
+			|_,
+			 this,
+			 (path, recursive, filter): (String, bool, Option<Vec<String>>)| {
 				to_lua_result(this.add_dir(
 					dunce::canonicalize(this.workdir.join(path))?,
 					recursive,
-					&filter
+					&filter,
 				))
 			},
 		);
