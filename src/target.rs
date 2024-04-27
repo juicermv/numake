@@ -112,6 +112,7 @@ impl Target
 		&mut self,
 		path_buf: PathBuf,
 		recursive: bool,
+		filter: &Option<Vec<String>>
 	) -> anyhow::Result<()>
 	{
 		if !path_buf.starts_with(&self.workdir) {
@@ -121,9 +122,12 @@ impl Target
 		for entry in fs::read_dir(path_buf)? {
 			let path = dunce::canonicalize(entry?.path())?;
 			if path.is_dir() && recursive {
-				self.add_dir(path.clone(), true)?
+				self.add_dir(path.clone(), true, filter)?
 			}
 			if path.is_file() {
+				if !filter.is_none() && filter.clone().unwrap().contains(&path.extension().unwrap_or("".as_ref()).to_str().unwrap().to_string()) {
+					continue
+				}
 				self.add_file(path.clone())?
 			}
 		}
@@ -749,10 +753,11 @@ impl UserData for Target
 	{
 		methods.add_method_mut(
 			"add_dir",
-			|_, this, (path, recursive): (String, bool)| {
+			|_, this, (path, recursive, filter): (String, bool, Option<Vec<String>>)| {
 				to_lua_result(this.add_dir(
 					dunce::canonicalize(this.workdir.join(path))?,
 					recursive,
+					&filter
 				))
 			},
 		);
