@@ -125,8 +125,8 @@ impl Target
 				self.add_dir(path.clone(), true, filter)?
 			}
 			if path.is_file() {
-				if !filter.is_none()
-					&& filter.clone().unwrap().contains(
+				if !filter.is_none() {
+					if filter.clone().unwrap().contains(
 						&path
 							.extension()
 							.unwrap_or("".as_ref())
@@ -134,9 +134,11 @@ impl Target
 							.unwrap()
 							.to_string(),
 					) {
-					continue;
+						self.add_file(path.clone())?
+					}
+				} else {
+					self.add_file(path.clone())?
 				}
-				self.add_file(path.clone())?
 			}
 		}
 		Ok(())

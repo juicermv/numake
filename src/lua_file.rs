@@ -215,18 +215,20 @@ impl LuaFile
 			cache_dir.join(format!("{}.{}", &file_uuid, "nucache"));
 
 		if table[&file_uuid] == file_size_toml && file_cache.exists() {
+			println!("Loading and executing script from cache...");
 			lua_state
 				.load(fs::read(&file_cache)?)
 				.set_name(self.file.file_name().unwrap().to_str().unwrap())
 				.exec()?;
+			println!("Success!");
 		} else if table[&file_uuid] != file_size_toml || !file_cache.exists() {
 			let file_content = fs::read(&self.file)?;
-
+			println!("Loading and executing script...");
 			lua_state
 				.load(&file_content)
 				.set_name(self.file.file_name().unwrap().to_str().unwrap())
 				.exec()?;
-
+			println!("Success! Saving script to cache...");
 			fs::write(
 				&file_cache,
 				Compiler::new()
@@ -238,6 +240,7 @@ impl LuaFile
 
 			table[&file_uuid] = file_size_toml.clone();
 			fs::write(&cache_toml, table.to_string())?;
+			println!("Done.");
 		}
 
 		let lua_workspace: Self = lua_state.globals().get("workspace")?;
@@ -363,6 +366,7 @@ impl LuaFile
 		url: String,
 	) -> anyhow::Result<String>
 	{
+		println!("Starting zip download...");
 		let path_str: String = format!(
 			// Where the archive will be extracted.
 			"{}/remote/{}",
@@ -373,15 +377,19 @@ impl LuaFile
 		let path = Path::new(&path_str);
 
 		if path.exists() && path.is_dir() && path.metadata()?.len() > 0 {
+			println!("Found non-empty extract path on system! ({}) Not downloading. (This is okay!)", &path_str);
 			Ok(path.to_str().unwrap().to_string())
 		} else {
 			let response = reqwest::blocking::get(&url)?;
 			if response.status().is_success() {
+				println!("Server responded with {}! Getting data...", response.status().to_string());
 				let bytes = response.bytes()?;
-				fs::create_dir_all(&path)?;
+				fs::create_dir_all(path)?;
 				let mut tempfile = tempfile()?; // Create a tempfile as a buffer for our response bytes because nothing else implements Seek ffs
 				tempfile.write_all(bytes.as_ref())?;
+				println!("Extracting archive...");
 				ZipArchive::new(BufReader::new(tempfile))?.extract(path)?;
+				println!("Done!");
 				Ok(path.to_str().unwrap().to_string())
 			} else {
 				Err(anyhow!(response.status()))?
