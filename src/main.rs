@@ -19,6 +19,7 @@ mod config;
 mod error;
 mod lua_file;
 mod target;
+mod util;
 
 #[cfg(not(test))]
 fn main() -> anyhow::Result<()>
@@ -40,7 +41,7 @@ fn main() -> anyhow::Result<()>
 		Subcommands::List(args) => {
 			let mut proj = LuaFile::new_dummy(args)?;
 			proj.process(&lua)?;
-			println!("{}", proj.list_targets()?);
+			println!("\nAvailable targets: {}", proj.list_targets()?);
 		}
 	}
 
@@ -74,6 +75,7 @@ mod tests
 			output: None,
 			workdir: "examples/test".to_string(),
 			arguments: Some(vec![]),
+			quiet: false
 		};
 
 		let mut proj = LuaFile::new(&args)?;
@@ -97,6 +99,7 @@ mod tests
 			output: None,
 			workdir: "examples/test".to_string(),
 			arguments: Some(vec![]),
+			quiet: false
 		};
 
 		let mut proj = LuaFile::new(&args)?;
@@ -107,31 +110,6 @@ mod tests
 			"examples/test/.numake/out/mingw/test.exe",
 		);
 		assert_eq!(test_exec.status()?.code(), Some(0));
-		Ok(())
-	}
-
-	#[test]
-	fn vcvars() -> anyhow::Result<()>
-	{
-		let dir = tempdir()?;
-		let path = dir.path().join("exec.bat");
-		let mut file = File::create(&path)?;
-		writeln!(&file, "@echo off")?;
-		writeln!(&file, "@call \"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat\" x64")?;
-		writeln!(&file, "@echo -$-")?;
-		writeln!(&file, "set")?;
-		file.flush()?;
-
-		let mut process = std::process::Command::new("cmd")
-			.args(["/C", "@call", path.to_str().unwrap()])
-			.output()?;
-		println!(
-			"OUTPUT: {}",
-			String::from_utf8(process.stdout)?
-				.split("-$-")
-				.collect::<Vec<&str>>()[1]
-		);
-
 		Ok(())
 	}
 }

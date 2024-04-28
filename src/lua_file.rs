@@ -33,10 +33,11 @@ use crate::{
 		NuMakeArgs,
 	},
 	error::{
-		NUMAKE_ERROR,
 		to_lua_result,
+		NUMAKE_ERROR,
 	},
 	target::Target,
+	util::log,
 };
 
 #[derive(Clone)]
@@ -55,6 +56,7 @@ pub struct LuaFile
 	pub(crate) toolset_linker: Option<String>,
 
 	arguments: Vec<String>,
+	quiet: bool,
 }
 
 impl UserData for LuaFile
@@ -76,6 +78,7 @@ impl UserData for LuaFile
 				this.output.clone(),
 				this.workdir.clone(),
 				false,
+				this.quiet,
 			))
 		});
 
@@ -87,6 +90,7 @@ impl UserData for LuaFile
 				this.output.clone(),
 				this.workdir.clone(),
 				true,
+				this.quiet,
 			))
 		});
 
@@ -136,7 +140,8 @@ impl LuaFile
 			toolset_linker: args.toolset_linker.clone(),
 			output: args.output.clone(),
 
-			arguments: args.arguments.clone().unwrap_or(vec![]),
+			arguments: args.arguments.clone().unwrap_or_default(),
+			quiet: args.quiet,
 		})
 	}
 
@@ -155,6 +160,7 @@ impl LuaFile
 			output: None,
 
 			arguments: vec![],
+			quiet: args.quiet,
 		})
 	}
 
@@ -215,20 +221,20 @@ impl LuaFile
 			cache_dir.join(format!("{}.{}", &file_uuid, "nucache"));
 
 		if table[&file_uuid] == file_size_toml && file_cache.exists() {
-			println!("Loading and executing script from cache...");
+			log("Loading and executing script from cache...", self.quiet);
 			lua_state
 				.load(fs::read(&file_cache)?)
 				.set_name(self.file.file_name().unwrap().to_str().unwrap())
 				.exec()?;
-			println!("Success!");
+			log("Success!", self.quiet);
 		} else if table[&file_uuid] != file_size_toml || !file_cache.exists() {
 			let file_content = fs::read(&self.file)?;
-			println!("Loading and executing script...");
+			log("Loading and executing script...", self.quiet);
 			lua_state
 				.load(&file_content)
 				.set_name(self.file.file_name().unwrap().to_str().unwrap())
 				.exec()?;
-			println!("Success! Saving script to cache...");
+			log("Success! Saving script to cache...", self.quiet);
 			fs::write(
 				&file_cache,
 				Compiler::new()
@@ -240,15 +246,18 @@ impl LuaFile
 
 			table[&file_uuid] = file_size_toml.clone();
 			fs::write(&cache_toml, table.to_string())?;
-			println!("Done.");
+			log("Done.", self.quiet);
 		}
 
 		let lua_workspace: Self = lua_state.globals().get("workspace")?;
 		self.targets = lua_workspace.targets.clone();
 
-		println!(
-			"Processing script done in {}ms!",
-			now.elapsed()?.as_millis()
+		log(
+			&format!(
+				"Processing script done in {}ms!",
+				now.elapsed()?.as_millis()
+			),
+			self.quiet,
 		);
 
 		Ok(())
@@ -256,7 +265,17 @@ impl LuaFile
 
 	pub fn list_targets(&self) -> anyhow::Result<String>
 	{
-		Ok(self.targets.keys().map(|name| name.clone() + " ").collect())
+		Ok(self
+			.targets
+			.iter()
+			.map(|(name, target)| {
+				if !target.is_msvc() {
+					format!("{}: generic", name)
+				} else {
+					format!("{}: msvc", name)
+				}
+			})
+			.collect())
 	}
 
 	pub fn build(&mut self) -> anyhow::Result<()>
@@ -279,14 +298,17 @@ impl LuaFile
 		if !self.targets.contains_key(_target) {
 			Err(anyhow!(&NUMAKE_ERROR.TARGET_NOT_FOUND))
 		} else {
-			println!("Selecting target {}...", _target);
-			println!("Building target {}...", _target);
+			log(&format!("Selecting target {}...", _target), self.quiet);
+			log(&format!("Building target {}...", _target), self.quiet);
 			let now = SystemTime::now();
 			self.targets.get(_target).unwrap().build(self)?;
-			println!(
-				"Building target {} done in {}ms!",
-				_target,
-				now.elapsed()?.as_millis()
+			log(
+				&format!(
+					"Building target {} done in {}ms!",
+					_target,
+					now.elapsed()?.as_millis()
+				),
+				self.quiet,
 			);
 			Ok(())
 		}
@@ -308,7 +330,7 @@ impl LuaFile
 		}
 
 		let mut table =
-			toml::Table::from_str(&*fs::read_to_string(&cache_toml)?)?;
+			toml::Table::from_str(&fs::read_to_string(&cache_toml)?)?;
 		let file_cache =
 			cache_dir.join(format!("{}.{}", &file_uuid, "nucache"));
 
@@ -338,23 +360,18 @@ impl LuaFile
 				|| !file_cache.exists()
 			{
 				let file_content = response.text()?;
-				let result =
-					lua_state.load(&file_content).set_name(&url).eval();
-				if result.is_ok() {
-					fs::write(
-						&file_cache,
-						Compiler::new()
-							.set_debug_level(0)
-							.set_optimization_level(2)
-							.set_coverage_level(2)
-							.compile(&file_content),
-					)?;
-					table[&file_uuid] = file_size_toml;
-					fs::write(&cache_toml, table.to_string())?;
-					Ok(result.ok().unwrap())
-				} else {
-					Err(result.err().unwrap())?
-				}
+				lua_state.load(&file_content).set_name(&url).eval()?;
+				fs::write(
+					&file_cache,
+					Compiler::new()
+						.set_debug_level(0)
+						.set_optimization_level(2)
+						.set_coverage_level(2)
+						.compile(&file_content),
+				)?;
+				table[&file_uuid] = file_size_toml;
+				fs::write(&cache_toml, table.to_string())?;
+				Ok(())
 			} else {
 				Err(anyhow!("URL REQUIRE ERROR"))?
 			}
@@ -366,7 +383,7 @@ impl LuaFile
 		url: String,
 	) -> anyhow::Result<String>
 	{
-		println!("Starting zip download...");
+		log("Starting zip download...", self.quiet);
 		let path_str: String = format!(
 			// Where the archive will be extracted.
 			"{}/remote/{}",
@@ -377,19 +394,25 @@ impl LuaFile
 		let path = Path::new(&path_str);
 
 		if path.exists() && path.is_dir() && path.metadata()?.len() > 0 {
-			println!("Found non-empty extract path on system! ({}) Not downloading. (This is okay!)", &path_str);
+			log(&format!("Found non-empty extract path on system! ({}) Not downloading. (This is okay!)", &path_str), self.quiet);
 			Ok(path.to_str().unwrap().to_string())
 		} else {
 			let response = reqwest::blocking::get(&url)?;
 			if response.status().is_success() {
-				println!("Server responded with {}! Getting data...", response.status().to_string());
+				log(
+					&format!(
+						"Server responded with {}! Getting data...",
+						response.status().to_string()
+					),
+					self.quiet,
+				);
 				let bytes = response.bytes()?;
 				fs::create_dir_all(path)?;
 				let mut tempfile = tempfile()?; // Create a tempfile as a buffer for our response bytes because nothing else implements Seek ffs
 				tempfile.write_all(bytes.as_ref())?;
-				println!("Extracting archive...");
+				log("Reading & extracting archive...", self.quiet);
 				ZipArchive::new(BufReader::new(tempfile))?.extract(path)?;
-				println!("Done!");
+				log("Done!", self.quiet);
 				Ok(path.to_str().unwrap().to_string())
 			} else {
 				Err(anyhow!(response.status()))?

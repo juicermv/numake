@@ -7,15 +7,18 @@ use std::{
 		Path,
 		PathBuf,
 	},
-	process::Command,
+	process::{
+		Command,
+		Stdio,
+	},
 };
 
 use anyhow::anyhow;
 use mlua::{
+	prelude::LuaError,
 	Error,
 	FromLua,
 	Lua,
-	prelude::LuaError,
 	Table,
 	UserData,
 	UserDataFields,
@@ -27,10 +30,11 @@ use tempfile::tempdir;
 
 use crate::{
 	error::{
-		NUMAKE_ERROR,
 		to_lua_result,
+		NUMAKE_ERROR,
 	},
 	lua_file::LuaFile,
+	util::log,
 };
 
 #[derive(Clone)]
@@ -58,6 +62,8 @@ pub struct Target
 	workdir: PathBuf,
 	msvc: bool,
 	msvc_arch: Option<String>,
+
+	quiet: bool,
 }
 
 impl Target
@@ -69,6 +75,7 @@ impl Target
 		output: Option<String>,
 		workdir: PathBuf,
 		msvc: bool,
+		quiet: bool,
 	) -> anyhow::Result<Self>
 	{
 		Ok(Target {
@@ -88,8 +95,11 @@ impl Target
 			name,
 			msvc,
 			msvc_arch: None,
+			quiet,
 		})
 	}
+
+	pub fn is_msvc(&self) -> bool { self.msvc }
 
 	pub fn add_file(
 		&mut self,
@@ -156,6 +166,7 @@ impl Target
 	}
 
 	fn setup_msvc(
+		&self,
 		workspace: &LuaFile,
 		arch: Option<String>,
 		platform_type: Option<String>,
@@ -216,6 +227,13 @@ impl Target
 			bat_file.flush()?;
 
 			Command::new("cmd")
+				.stdout(
+					if self.quiet {
+						Stdio::null()
+					} else {
+						Stdio::piped()
+					},
+				)
 				.args(["/C", "@call", bat_path.to_str().unwrap()])
 				.status()?;
 			let env: String = fs::read_to_string(env_path)?;
@@ -340,18 +358,28 @@ impl Target
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
 			let status = compiler
+				.stdout(
+					if self.quiet {
+						Stdio::null()
+					} else {
+						Stdio::piped()
+					},
+				)
 				.args(&compiler_args)
 				.current_dir(&parent_workspace.workdir)
 				.status()?;
 
-			println!(
-				"\n{} exited with {}.\n",
-				toolset_compiler.clone().unwrap_or("NULL".to_string()),
-				status
+			log(
+				&format!(
+					"\n{} exited with {}.\n",
+					toolset_compiler.clone().unwrap_or("NULL".to_string()),
+					status
+				),
+				self.quiet,
 			);
 
 			if !status.success() {
-				println!("Aborting...");
+				log("Aborting...", self.quiet);
 				Err(anyhow!(status))?
 			}
 		}
@@ -380,13 +408,23 @@ impl Target
 			linker_args.push(flag)
 		}
 
-		println!(
-			"\n{} exited with {}. \n",
-			toolset_linker.clone().unwrap_or("NULL".to_string()),
-			linker
-				.args(&linker_args)
-				.current_dir(&parent_workspace.workdir)
-				.status()?
+		log(
+			&format!(
+				"\n{} exited with {}. \n",
+				toolset_linker.clone().unwrap_or("NULL".to_string()),
+				linker
+					.stdout(
+						if self.quiet {
+							Stdio::null()
+						} else {
+							Stdio::piped()
+						},
+					)
+					.args(&linker_args)
+					.current_dir(&parent_workspace.workdir)
+					.status()?
+			),
+			self.quiet,
 		);
 
 		for (oldpath, newpath) in self.assets.clone() {
@@ -430,7 +468,7 @@ impl Target
 			.workspace
 			.join(format!("out/{}", &self.name));
 
-		let msvc_env = Self::setup_msvc(
+		let msvc_env = self.setup_msvc(
 			parent_workspace,
 			self.msvc_arch.clone(),
 			None,
@@ -490,15 +528,22 @@ impl Target
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
 			let status = compiler
+				.stdout(
+					if self.quiet {
+						Stdio::null()
+					} else {
+						Stdio::piped()
+					},
+				)
 				.envs(&msvc_env)
 				.args(&compiler_args)
 				.current_dir(&parent_workspace.workdir)
 				.status()?;
 
-			println!("\ncl exited with {}.\n", status);
+			log(&format!("\ncl exited with {}.\n", status), self.quiet);
 
 			if !status.success() {
-				println!("Aborting...");
+				log("Aborting...", self.quiet);
 				Err(anyhow!(status))?
 			}
 		}
@@ -526,13 +571,23 @@ impl Target
 			linker_args.push(flag)
 		}
 
-		println!(
-			"\ncl exited with {}. \n",
-			linker
-				.args(&linker_args)
-				.envs(&msvc_env)
-				.current_dir(&parent_workspace.workdir)
-				.status()?
+		log(
+			&format!(
+				"\ncl exited with {}. \n",
+				linker
+					.stdout(
+						if self.quiet {
+							Stdio::null()
+						} else {
+							Stdio::piped()
+						},
+					)
+					.args(&linker_args)
+					.envs(&msvc_env)
+					.current_dir(&parent_workspace.workdir)
+					.status()?
+			),
+			self.quiet,
 		);
 
 		for (oldpath, newpath) in self.assets.clone() {
