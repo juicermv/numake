@@ -28,8 +28,7 @@ fn main() -> anyhow::Result<()>
 	let lua = Lua::new();
 	lua.enable_jit(true);
 	lua.sandbox(true)?;
-	println!("Warming up...");
-
+	
 	match &cli.command {
 		Subcommands::Build(args) => {
 			let mut proj = LuaFile::new(args)?;
@@ -37,7 +36,12 @@ fn main() -> anyhow::Result<()>
 			proj.build()?;
 		}
 
-		//Subcommands::Inspect(_) => {}
+		Subcommands::Inspect(args) => {
+			let mut proj = LuaFile::new_inspect(args)?;
+			proj.process(&lua)?;
+
+			println!("{}", serde_json::to_string_pretty(&proj)?);
+		}
 		Subcommands::List(args) => {
 			let mut proj = LuaFile::new_dummy(args)?;
 			proj.process(&lua)?;
@@ -51,13 +55,7 @@ fn main() -> anyhow::Result<()>
 #[cfg(test)]
 mod tests
 {
-	use std::{
-		fs::File,
-		io::Write,
-	};
-
 	use mlua::Lua;
-	use tempfile::tempdir;
 
 	use crate::{
 		config::NuMakeArgs,
@@ -75,7 +73,7 @@ mod tests
 			output: None,
 			workdir: "examples/test".to_string(),
 			arguments: Some(vec![]),
-			quiet: false
+			quiet: false,
 		};
 
 		let mut proj = LuaFile::new(&args)?;
@@ -99,7 +97,7 @@ mod tests
 			output: None,
 			workdir: "examples/test".to_string(),
 			arguments: Some(vec![]),
-			quiet: false
+			quiet: false,
 		};
 
 		let mut proj = LuaFile::new(&args)?;

@@ -26,6 +26,7 @@ use mlua::{
 	Value,
 };
 use pathdiff::diff_paths;
+use serde::Serialize;
 use tempfile::tempdir;
 
 use crate::{
@@ -37,7 +38,7 @@ use crate::{
 	util::log,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct Target
 {
 	pub compiler_flags: Vec<String>,
@@ -60,10 +61,12 @@ pub struct Target
 	pub name: String,
 
 	workdir: PathBuf,
-	msvc: bool,
 	msvc_arch: Option<String>,
 
+	#[serde(skip_serializing)]
 	quiet: bool,
+	#[serde(skip_serializing)]
+	msvc: bool,
 }
 
 impl Target

@@ -23,40 +23,44 @@ use mlua::{
 	UserDataMethods,
 	Value,
 };
+use serde::Serialize;
 use tempfile::tempfile;
 use uuid::Uuid;
 use zip::ZipArchive;
 
 use crate::{
 	config::{
+		InspectArgs,
 		ListArgs,
 		NuMakeArgs,
 	},
 	error::{
-		to_lua_result,
 		NUMAKE_ERROR,
+		to_lua_result,
 	},
 	target::Target,
 	util::log,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct LuaFile
 {
-	targets: HashMap<String, Target>,
-
-	file: PathBuf,
 	pub(crate) workspace: PathBuf,
 	pub(crate) workdir: PathBuf, // Should already exist
 
-	target: String,
 	pub(crate) output: Option<String>,
 
 	pub(crate) toolset_compiler: Option<String>,
 	pub(crate) toolset_linker: Option<String>,
 
+	targets: HashMap<String, Target>,
+	file: PathBuf,
 	arguments: Vec<String>,
+
+	#[serde(skip_serializing)]
 	quiet: bool,
+	#[serde(skip_serializing)]
+	target: String,
 }
 
 impl UserData for LuaFile
@@ -136,6 +140,25 @@ impl LuaFile
 			)?,
 			workspace: dunce::canonicalize(&args.workdir)?.join(".numake"),
 			target: args.target.clone(),
+			toolset_compiler: args.toolset_compiler.clone(),
+			toolset_linker: args.toolset_linker.clone(),
+			output: args.output.clone(),
+
+			arguments: args.arguments.clone().unwrap_or_default(),
+			quiet: args.quiet,
+		})
+	}
+
+	pub fn new_inspect(args: &InspectArgs) -> anyhow::Result<Self>
+	{
+		Ok(LuaFile {
+			targets: HashMap::new(),
+			workdir: dunce::canonicalize(&args.workdir)?,
+			file: dunce::canonicalize(
+				dunce::canonicalize(&args.workdir)?.join(&args.file),
+			)?,
+			workspace: dunce::canonicalize(&args.workdir)?.join(".numake"),
+			target: "*".to_string(),
 			toolset_compiler: args.toolset_compiler.clone(),
 			toolset_linker: args.toolset_linker.clone(),
 			output: args.output.clone(),
@@ -393,7 +416,7 @@ impl LuaFile
 
 		let path = Path::new(&path_str);
 
-		if path.exists() && path.is_dir() && path.metadata()?.len() > 0 {
+		if path.exists() && path.is_dir() {
 			log(&format!("Found non-empty extract path on system! ({}) Not downloading. (This is okay!)", &path_str), self.quiet);
 			Ok(path.to_str().unwrap().to_string())
 		} else {
