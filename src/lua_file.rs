@@ -1,10 +1,6 @@
 use std::{
 	collections::HashMap,
 	fs,
-	io::{
-		BufReader,
-		Write,
-	},
 	path::{
 		Path,
 		PathBuf,
@@ -12,6 +8,7 @@ use std::{
 	str::FromStr,
 	time::SystemTime,
 };
+use std::io::Cursor;
 
 use anyhow::anyhow;
 use mlua::{
@@ -24,7 +21,6 @@ use mlua::{
 	Value,
 };
 use serde::Serialize;
-use tempfile::tempfile;
 use uuid::Uuid;
 use zip::ZipArchive;
 
@@ -424,17 +420,14 @@ impl LuaFile
 			if response.status().is_success() {
 				log(
 					&format!(
-						"Server responded with {}! Getting data...",
+						"Server responded with {}!",
 						response.status().to_string()
 					),
 					self.quiet,
 				);
-				let bytes = response.bytes()?;
 				fs::create_dir_all(path)?;
-				let mut tempfile = tempfile()?; // Create a tempfile as a buffer for our response bytes because nothing else implements Seek ffs
-				tempfile.write_all(bytes.as_ref())?;
-				log("Reading & extracting archive...", self.quiet);
-				ZipArchive::new(BufReader::new(tempfile))?.extract(path)?;
+				log("Downloading & extracting archive...", self.quiet);
+				ZipArchive::new(Cursor::new(response.bytes()?))?.extract(path)?;
 				log("Done!", self.quiet);
 				Ok(path.to_str().unwrap().to_string())
 			} else {

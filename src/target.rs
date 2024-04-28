@@ -14,25 +14,15 @@ use std::{
 };
 
 use anyhow::anyhow;
-use mlua::{
-	prelude::LuaError,
-	Error,
-	FromLua,
-	Lua,
-	Table,
-	UserData,
-	UserDataFields,
-	UserDataMethods,
-	Value,
-};
+use mlua::{Error, FromLua, Lua, prelude::LuaError, Table, UserData, UserDataFields, UserDataMethods, Value};
 use pathdiff::diff_paths;
 use serde::Serialize;
 use tempfile::tempdir;
 
 use crate::{
 	error::{
-		to_lua_result,
 		NUMAKE_ERROR,
+		to_lua_result,
 	},
 	lua_file::LuaFile,
 	util::log,
@@ -48,8 +38,8 @@ pub struct Target
 	pub libs: Vec<String>,
 	pub defines: Vec<String>,
 
-	pub assets: HashMap<String, String>,
-	
+	pub assets: HashMap<PathBuf, String>,
+
 	pub output: Option<String>,
 
 	pub files: Vec<PathBuf>,
@@ -166,6 +156,23 @@ impl Target
 		}
 	}
 
+	fn copy_assets(
+		&self,
+		out_dir: &PathBuf,
+	) -> anyhow::Result<()>
+	{
+		for (key, val) in self.assets.clone() {
+			let copy_path = out_dir.join(val);
+			if !copy_path.starts_with(out_dir) {
+				Err(anyhow!(NUMAKE_ERROR.ASSET_COPY_PATH_OUTSIDE_OUTPUT_DIR))?
+			} else {
+				fs::copy(key, copy_path)?;
+			}
+		}
+
+		Ok(())
+	}
+
 	fn setup_msvc(
 		&self,
 		workspace: &LuaFile,
@@ -232,7 +239,14 @@ impl Target
 					if self.quiet {
 						Stdio::null()
 					} else {
-						Stdio::piped()
+						Stdio::inherit()
+					},
+				)
+				.stderr(
+					if self.quiet {
+						Stdio::null()
+					} else {
+						Stdio::inherit()
 					},
 				)
 				.args(["/C", "@call", bat_path.to_str().unwrap()])
@@ -363,7 +377,14 @@ impl Target
 					if self.quiet {
 						Stdio::null()
 					} else {
-						Stdio::piped()
+						Stdio::inherit()
+					},
+				)
+				.stderr(
+					if self.quiet {
+						Stdio::null()
+					} else {
+						Stdio::inherit()
 					},
 				)
 				.args(&compiler_args)
@@ -418,7 +439,14 @@ impl Target
 						if self.quiet {
 							Stdio::null()
 						} else {
-							Stdio::piped()
+							Stdio::inherit()
+						},
+					)
+					.stderr(
+						if self.quiet {
+							Stdio::null()
+						} else {
+							Stdio::inherit()
 						},
 					)
 					.args(&linker_args)
@@ -428,21 +456,7 @@ impl Target
 			self.quiet,
 		);
 
-		for (oldpath, newpath) in self.assets.clone() {
-			let old_path = PathBuf::from(&oldpath); // Already canonicalized and validated.
-			let new_path = out_dir.join(&newpath); // Needs to be validated during build, and so we do.
-
-			if new_path.starts_with(&out_dir) {
-				// Make sure we haven't escaped our output dir
-				fs::copy(old_path, new_path)?;
-			} else {
-				Err(anyhow!(format!(
-					"Asset file '{}' copied to invalid destination! ({})",
-					old_path.to_str().unwrap_or("ERROR"),
-					new_path.to_str().unwrap_or("ERROR")
-				)))?
-			}
-		}
+		self.copy_assets(&out_dir)?;
 
 		Ok(())
 	}
@@ -533,7 +547,14 @@ impl Target
 					if self.quiet {
 						Stdio::null()
 					} else {
-						Stdio::piped()
+						Stdio::inherit()
+					},
+				)
+				.stderr(
+					if self.quiet {
+						Stdio::null()
+					} else {
+						Stdio::inherit()
 					},
 				)
 				.envs(&msvc_env)
@@ -580,7 +601,14 @@ impl Target
 						if self.quiet {
 							Stdio::null()
 						} else {
-							Stdio::piped()
+							Stdio::inherit()
+						},
+					)
+					.stderr(
+						if self.quiet {
+							Stdio::null()
+						} else {
+							Stdio::inherit()
 						},
 					)
 					.args(&linker_args)
@@ -591,21 +619,7 @@ impl Target
 			self.quiet,
 		);
 
-		for (oldpath, newpath) in self.assets.clone() {
-			let old_path = PathBuf::from(&oldpath); // Already canonicalized and validated.
-			let new_path = out_dir.join(&newpath); // Needs to be validated during build, and so we do.
-
-			if new_path.starts_with(&out_dir) {
-				// Make sure we haven't escaped our output dir
-				fs::copy(old_path, new_path)?;
-			} else {
-				Err(anyhow!(format!(
-					"Asset file '{}' copied to invalid destination! ({})",
-					old_path.to_str().unwrap_or("ERROR"),
-					new_path.to_str().unwrap_or("ERROR")
-				)))?
-			}
-		}
+		self.copy_assets(&out_dir)?;
 
 		Ok(())
 	}
@@ -816,20 +830,29 @@ impl UserData for Target
 
 		{
 			fields.add_field_method_get("assets", |_, this| {
-				Ok(this.assets.clone())
+				Ok(this
+					.assets
+					.iter()
+					.map(|(key, val)| {
+						(
+							key.to_str().unwrap_or_default().to_string(),
+							val.clone(),
+						)
+					})
+					.collect::<HashMap<String, String>>())
 			});
 
 			fields.add_field_method_set("assets", |_, this, val: Table| {
-				val.for_each::<String, String>(|old_path, new_path| {
-					let path =
-						&dunce::canonicalize(this.workdir.join(&old_path))?; // Will automatically error if path doesn't exist.
+				val.for_each(|key: String, val: String| {
+					let path = dunce::canonicalize(this.workdir.join(key))?; // Will automatically error if path doesn't exist.
 					if !path.starts_with(&this.workdir) {
 						Err(mlua::Error::runtime(
 							NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR,
 						))?
 					}
 
-					this.assets.insert(old_path, new_path); // Will validate new path later during build.
+					this.assets.insert(path, val); // Will validate new path later during build.
+
 					Ok(())
 				})
 			});
