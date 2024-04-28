@@ -49,8 +49,7 @@ pub struct Target
 	pub defines: Vec<String>,
 
 	pub assets: HashMap<String, String>,
-
-	pub lang: String,
+	
 	pub output: Option<String>,
 
 	pub files: Vec<PathBuf>,
@@ -87,7 +86,6 @@ impl Target
 			include_paths: Vec::new(),
 			lib_paths: Vec::new(),
 			libs: Vec::new(),
-			lang: String::new(),
 			output,
 			files: Vec::new(),
 			toolset_compiler,
