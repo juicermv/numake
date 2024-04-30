@@ -1,9 +1,19 @@
--- Download SDL2 for MSVC and mingw
+--- Download SDL2 for MSVC and mingw
 sdl_path_mingw = workspace:download_zip("https://github.com/libsdl-org/SDL/releases/download/release-2.30.2/SDL2-devel-2.30.2-mingw.zip") .. "/SDL2-2.30.2"
 sdl_path_msvc = workspace:download_zip("https:/github.com/libsdl-org/SDL/releases/download/release-2.30.2/SDL2-devel-2.30.2-VC.zip")
 
--- MSVC 64 BIT TARGET
-msvc = workspace:create_msvc_target("msvc") -- We create targets via the workspace so they can inherit some important values!
+--- You can use the cache system to save user-specific preferences and things of the sort.
+--- You can store almost every lua variable type but for this example we'll use a string:
+if workspace:get("ice_cream") == nil then
+    print("What is your favorite ice cream flavor?")
+    ice_cream = workspace:query() --- Use workspace:query to read a line from stdin
+    workspace:set("ice_cream", ice_cream)
+else
+    print("I know your favorite ice cream flavor! It's " .. workspace:get("ice_cream") .. "!")
+end
+
+--- MSVC 64 BIT TARGET
+msvc = workspace:create_msvc_target("msvc") --- We create targets via the workspace so they can inherit some important values!
 msvc.include_paths = {
     sdl_path_msvc .. "/SDL2-2.30.2/include"
 }
@@ -23,10 +33,10 @@ msvc.output = "test.exe"
 msvc.definitions = { "MSVC" }
 msvc.files = { "main.cpp" }
 msvc.msvc_arch = "x64"
--- END MSVC 64 BIT TARGET
+--- END MSVC 64 BIT TARGET
 
--- MSVC 32 BIT TARGET
-msvc_x86 = workspace:create_msvc_target("msvc_x86") -- We create targets via the workspace so they can inherit some important values!
+--- MSVC 32 BIT TARGET
+msvc_x86 = workspace:create_msvc_target("msvc_x86") --- We create targets via the workspace so they can inherit some important values!
 msvc_x86.include_paths = {
     sdl_path_msvc .. "/SDL2-2.30.2/include"
 }
@@ -46,10 +56,10 @@ msvc_x86.output = "test.exe"
 msvc_x86.definitions = { "MSVC" }
 msvc_x86.files = { "main.cpp" }
 msvc_x86.msvc_arch = "x86"
--- END MSVC 32 BIT TARGET
+--- END MSVC 32 BIT TARGET
 
 
--- MINGW 64 BIT TARGET
+--- MINGW 64 BIT TARGET
 mingw = workspace:create_target("mingw")
 mingw.compiler = "x86_64-w64-mingw32-g++"
 mingw.linker = mingw.compiler
@@ -77,13 +87,13 @@ mingw.libraries = {
     "uuid"
 }
 
-mingw.compiler_flags = {"--verbose", "-mwindows", "-static", "-Wl,-Bstatic"}
+mingw.compiler_flags = {"---verbose", "-mwindows", "-static", "-Wl,-Bstatic"}
 mingw.linker_flags = mingw.compiler_flags
 mingw.assets = { [sdl_path_mingw .. "/x86_64-w64-mingw32/bin/SDL2.dll"] = "SDL2.dll" }
 mingw.files = { "main.cpp "}
--- END MINGW 64 BIT TARGET
+--- END MINGW 64 BIT TARGET
 
--- MINGW 32 BIT TARGET
+--- MINGW 32 BIT TARGET
 mingw_i686 = workspace:create_target("mingw_i686")
 mingw_i686.compiler = "i686-w64-mingw32-g++"
 mingw_i686.linker = mingw_i686.compiler
@@ -111,14 +121,14 @@ mingw_i686.libraries = {
     "uuid"
 }
 
-mingw_i686.compiler_flags = {"--verbose", "-mwindows", "-static", "-Wl,-Bstatic"}
+mingw_i686.compiler_flags = {"---verbose", "-mwindows", "-static", "-Wl,-Bstatic"}
 mingw_i686.linker_flags = mingw_i686.compiler_flags
 mingw_i686.assets = { [sdl_path_mingw .. "/i686-w64-mingw32/bin/SDL2.dll"] = "SDL2.dll" }
 mingw_i686.files = { "main.cpp "}
--- END MINGW 32 BIT TARGET
+--- END MINGW 32 BIT TARGET
 
--- GCC TARGET (assumes you're on Linux)
--- Make sure to install SDL2 via your package manager!
+--- GCC TARGET (assumes you're on Linux)
+--- Make sure to install SDL2 via your package manager!
 gcc = workspace:create_target("gcc")
 gcc.libraries = { "SDL2" }
 
@@ -126,15 +136,15 @@ if workspace.arguments["linux"] ~= nil then
     gcc.definitions = { "linux" }
 end
 
-gcc.compiler_flags = {"--verbose"}
+gcc.compiler_flags = {"---verbose"}
 gcc.linker_flags = gcc.compiler_flags
 gcc.compiler = "g++"
 gcc.linker = gcc.compiler
 gcc.output = "test"
 gcc.files = { "main.cpp" }
--- END GCC TARGET
+--- END GCC TARGET
 
--- Targets should be registered after they are created and set up, not before or during!
+--- Targets should be registered after they are created and set up, not before or during!
 workspace:register_target(mingw)
 workspace:register_target(mingw_i686)
 workspace:register_target(msvc)

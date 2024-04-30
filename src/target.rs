@@ -3,10 +3,7 @@ use std::{
 	fs,
 	fs::File,
 	io::Write,
-	path::{
-		Path,
-		PathBuf,
-	},
+	path::PathBuf,
 	process::{
 		Command,
 		Stdio,
@@ -20,13 +17,11 @@ use serde::Serialize;
 use tempfile::tempdir;
 
 use crate::{
-	error::{
-		NUMAKE_ERROR,
-		to_lua_result,
-	},
-	lua_file::LuaFile,
+	error::NUMAKE_ERROR,
+	lua_workspace::LuaWorkspace,
 	util::log,
 };
+use crate::util::{download_vswhere, to_lua_result};
 
 #[derive(Clone, Serialize)]
 pub struct Target
@@ -145,17 +140,6 @@ impl Target
 		Ok(())
 	}
 
-	fn download_vswhere<P: AsRef<Path>>(path: &P) -> anyhow::Result<()>
-	{
-		let response = reqwest::blocking::get("https://github.com/microsoft/vswhere/releases/latest/download/vswhere.exe")?;
-		if response.status().is_success() {
-			fs::write(path, response.bytes()?.as_ref())?;
-			Ok(())
-		} else {
-			Err(anyhow!(response.status()))
-		}
-	}
-
 	fn copy_assets(
 		&self,
 		out_dir: &PathBuf,
@@ -175,26 +159,15 @@ impl Target
 
 	fn setup_msvc(
 		&self,
-		workspace: &LuaFile,
+		workspace: &mut LuaWorkspace,
 		arch: Option<String>,
 		platform_type: Option<String>,
 		winsdk_version: Option<String>,
 	) -> anyhow::Result<HashMap<String, String>>
 	{
-		let remote_dir_str: String = format!(
-			// Where the archive will be extracted.
-			"{}/remote/vswhere",
-			workspace.workspace.to_str().unwrap_or("ERROR")
-		);
-
-		let remote_dir = Path::new(&remote_dir_str);
-		if !remote_dir.exists() {
-			fs::create_dir_all(remote_dir)?;
-		}
-
-		let vswhere_path = remote_dir.join("vswhere.exe");
+		let vswhere_path = workspace.cache.get_dir(&"vswhere".to_string())?.join("vswhere.exe");
 		if !vswhere_path.exists() {
-			Self::download_vswhere(&vswhere_path)?;
+			download_vswhere(&vswhere_path)?;
 		}
 
 		let vswhere_output: String = String::from_utf8(
@@ -274,7 +247,7 @@ impl Target
 
 	pub fn build(
 		&self,
-		parent_workspace: &LuaFile,
+		parent_workspace: &mut LuaWorkspace,
 	) -> anyhow::Result<()>
 	{
 		if self.msvc {
@@ -286,7 +259,7 @@ impl Target
 
 	fn build_generic(
 		&self,
-		parent_workspace: &LuaFile,
+		parent_workspace: &mut LuaWorkspace,
 	) -> anyhow::Result<()>
 	{
 		let obj_dir: PathBuf = parent_workspace
@@ -388,7 +361,7 @@ impl Target
 					},
 				)
 				.args(&compiler_args)
-				.current_dir(&parent_workspace.workdir)
+				.current_dir(&parent_workspace.working_directory)
 				.status()?;
 
 			log(
@@ -450,7 +423,7 @@ impl Target
 						},
 					)
 					.args(&linker_args)
-					.current_dir(&parent_workspace.workdir)
+					.current_dir(&parent_workspace.working_directory)
 					.status()?
 			),
 			self.quiet,
@@ -464,7 +437,7 @@ impl Target
 	#[cfg(not(windows))]
 	fn build_msvc(
 		&self,
-		_: &LuaFile,
+		_: &LuaWorkspace,
 	) -> anyhow::Result<()>
 	{
 		Err(anyhow!(&NUMAKE_ERROR.MSVC_WINDOWS_ONLY))
@@ -473,7 +446,7 @@ impl Target
 	#[cfg(windows)]
 	fn build_msvc(
 		&self,
-		parent_workspace: &LuaFile,
+		parent_workspace: &mut LuaWorkspace,
 	) -> anyhow::Result<()>
 	{
 		let obj_dir: PathBuf = parent_workspace
@@ -559,7 +532,7 @@ impl Target
 				)
 				.envs(&msvc_env)
 				.args(&compiler_args)
-				.current_dir(&parent_workspace.workdir)
+				.current_dir(&parent_workspace.working_directory)
 				.status()?;
 
 			log(&format!("\ncl exited with {}.\n", status), self.quiet);
@@ -613,7 +586,7 @@ impl Target
 					)
 					.args(&linker_args)
 					.envs(&msvc_env)
-					.current_dir(&parent_workspace.workdir)
+					.current_dir(&parent_workspace.working_directory)
 					.status()?
 			),
 			self.quiet,

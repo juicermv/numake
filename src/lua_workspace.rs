@@ -1,53 +1,58 @@
 use std::{
 	collections::HashMap,
 	fs,
-	path::{
-		Path,
-		PathBuf,
+	io::{
+		Cursor,
+		stdin,
 	},
-	str::FromStr,
+	path::PathBuf,
 	time::SystemTime,
 };
-use std::io::Cursor;
 
 use anyhow::anyhow;
 use mlua::{
 	Compiler,
 	FromLua,
 	Lua,
+	prelude::LuaValue,
 	UserData,
 	UserDataFields,
 	UserDataMethods,
 	Value,
 };
 use serde::Serialize;
-use uuid::Uuid;
 use zip::ZipArchive;
 
 use crate::{
-	config::{
+	cache::Cache,
+	cli_args::{
 		InspectArgs,
 		ListArgs,
 		NuMakeArgs,
 	},
-	error::{
-		NUMAKE_ERROR,
+	error::NUMAKE_ERROR,
+	target::Target,
+	util::{
+		into_lua_value,
+		into_toml_value,
+		log,
 		to_lua_result,
 	},
-	target::Target,
-	util::log,
 };
 
 #[derive(Clone, Serialize)]
-pub struct LuaFile
+pub struct LuaWorkspace
 {
 	pub(crate) workspace: PathBuf,
-	pub(crate) workdir: PathBuf, // Should already exist
+	pub(crate) working_directory: PathBuf, // Should already exist
 
 	pub(crate) output: Option<String>,
 
 	pub(crate) toolset_compiler: Option<String>,
 	pub(crate) toolset_linker: Option<String>,
+
+	#[serde(skip_serializing)]
+	pub cache: Cache,
 
 	targets: HashMap<String, Target>,
 	file: PathBuf,
@@ -59,7 +64,7 @@ pub struct LuaFile
 	target: String,
 }
 
-impl UserData for LuaFile
+impl UserData for LuaWorkspace
 {
 	fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F)
 	{
@@ -76,7 +81,7 @@ impl UserData for LuaFile
 				this.toolset_compiler.clone(),
 				this.toolset_linker.clone(),
 				this.output.clone(),
-				this.workdir.clone(),
+				this.working_directory.clone(),
 				false,
 				this.quiet,
 			))
@@ -88,7 +93,7 @@ impl UserData for LuaFile
 				None,
 				None,
 				this.output.clone(),
-				this.workdir.clone(),
+				this.working_directory.clone(),
 				true,
 				this.quiet,
 			))
@@ -98,43 +103,59 @@ impl UserData for LuaFile
 			Ok(this.targets.insert(target.name.clone(), target))
 		});
 
-		methods.add_method("download_zip", |_, this, url: String| {
-			to_lua_result(this.workspace_download_zip(url))
+		methods.add_method_mut("download_zip", |_, this, url: String| {
+			to_lua_result(this.workspace_download_zip(&url))
 		});
 
-		methods.add_method("require_url", |lua, this, url: String| {
-			to_lua_result(this.require_url(lua, url))
+		methods.add_method_mut("require_url", |lua, this, url: String| {
+			let chunk = to_lua_result(this.require_url(&url))?;
+			lua.load(chunk).eval::<LuaValue>()
 		});
-	}
-}
 
-impl<'lua> FromLua<'lua> for LuaFile
-{
-	fn from_lua(
-		value: Value<'lua>,
-		_: &'lua Lua,
-	) -> mlua::Result<Self>
-	{
-		match value {
-			Value::UserData(user_data) => {
-				Ok(user_data.borrow::<Self>()?.clone())
+		methods.add_method_mut(
+			"set",
+			|_, this, (key, value): (String, LuaValue)| {
+				this.cache.user_values.insert(key, into_toml_value(&value)?);
+				Ok(())
+			},
+		);
+
+		methods.add_method("get", |lua, this, key: String| {
+			if this.cache.user_values.contains_key(&key) {
+				Ok(Some(into_lua_value(
+					lua,
+					this.cache.user_values.get(&key).unwrap(),
+				)?))
+			} else {
+				Ok(None)
 			}
-			_ => unreachable!(),
-		}
+		});
+
+		methods.add_method("query", |_, _, ()| {
+			let mut buffer = String::new();
+			stdin().read_line(&mut buffer)?;
+			Ok(buffer)
+		});
 	}
 }
 
-impl LuaFile
+impl LuaWorkspace
 {
 	pub fn new(args: &NuMakeArgs) -> anyhow::Result<Self>
 	{
-		Ok(LuaFile {
+		let workdir = dunce::canonicalize(&args.workdir)?;
+		let workspace = workdir.join(".numake");
+		let file = dunce::canonicalize(workdir.join(&args.file))?;
+
+		if !file.starts_with(&workdir) {
+			Err(anyhow!(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?;
+		}
+
+		Ok(LuaWorkspace {
 			targets: HashMap::new(),
-			workdir: dunce::canonicalize(&args.workdir)?,
-			file: dunce::canonicalize(
-				dunce::canonicalize(&args.workdir)?.join(&args.file),
-			)?,
-			workspace: dunce::canonicalize(&args.workdir)?.join(".numake"),
+			working_directory: workdir,
+			file,
+			workspace: workspace.clone(),
 			target: args.target.clone(),
 			toolset_compiler: args.toolset_compiler.clone(),
 			toolset_linker: args.toolset_linker.clone(),
@@ -142,18 +163,25 @@ impl LuaFile
 
 			arguments: args.arguments.clone().unwrap_or_default(),
 			quiet: args.quiet,
+			cache: Cache::new(workspace)?,
 		})
 	}
 
 	pub fn new_inspect(args: &InspectArgs) -> anyhow::Result<Self>
 	{
-		Ok(LuaFile {
+		let workdir = dunce::canonicalize(&args.workdir)?;
+		let workspace = workdir.join(".numake");
+		let file = dunce::canonicalize(workdir.join(&args.file))?;
+
+		if !file.starts_with(&workdir) {
+			Err(anyhow!(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?;
+		}
+
+		Ok(LuaWorkspace {
 			targets: HashMap::new(),
-			workdir: dunce::canonicalize(&args.workdir)?,
-			file: dunce::canonicalize(
-				dunce::canonicalize(&args.workdir)?.join(&args.file),
-			)?,
-			workspace: dunce::canonicalize(&args.workdir)?.join(".numake"),
+			working_directory: workdir,
+			file,
+			workspace: workspace.clone(),
 			target: "*".to_string(),
 			toolset_compiler: args.toolset_compiler.clone(),
 			toolset_linker: args.toolset_linker.clone(),
@@ -161,18 +189,25 @@ impl LuaFile
 
 			arguments: args.arguments.clone().unwrap_or_default(),
 			quiet: args.quiet,
+			cache: Cache::new(workspace)?,
 		})
 	}
 
 	pub fn new_dummy(args: &ListArgs) -> anyhow::Result<Self>
 	{
-		Ok(LuaFile {
+		let workdir = dunce::canonicalize(&args.workdir)?;
+		let workspace = workdir.join(".numake");
+		let file = dunce::canonicalize(workdir.join(&args.file))?;
+
+		if !file.starts_with(&workdir) {
+			Err(anyhow!(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?;
+		}
+
+		Ok(LuaWorkspace {
 			targets: HashMap::new(),
-			workdir: dunce::canonicalize(&args.workdir)?,
-			file: dunce::canonicalize(
-				dunce::canonicalize(&args.workdir)?.join(&args.file),
-			)?,
-			workspace: dunce::canonicalize(&args.workdir)?.join(".numake"),
+			working_directory: workdir,
+			file,
+			workspace: workspace.clone(),
 			target: "".to_string(),
 			toolset_compiler: None,
 			toolset_linker: None,
@@ -180,6 +215,7 @@ impl LuaFile
 
 			arguments: vec![],
 			quiet: args.quiet,
+			cache: Cache::new(workspace)?,
 		})
 	}
 
@@ -200,53 +236,34 @@ impl LuaFile
 			fs::create_dir_all(&self.workspace)?;
 		}
 
-		if !self.file.starts_with(&self.workdir) {
+		if !self.file.starts_with(&self.working_directory) {
 			// Throw error if file is outside working directory
 			Err(anyhow!(&NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
 		}
 
 		lua_state.globals().set("workspace", self.clone())?;
 
-		let file_uuid = Uuid::new_v8(
-			*self
-				.file
-				.to_str()
-				.unwrap()
-				.as_bytes()
-				.last_chunk::<16>()
-				.unwrap(),
-		)
-		.to_string();
-
-		let cache_dir = self.workspace.join("cache");
-		if !cache_dir.exists() {
-			fs::create_dir_all(&cache_dir)?;
-		}
-
-		let cache_toml = cache_dir.join("cache.toml");
+		// Caching
 		let file_size = self.file.metadata()?.len().to_string();
 		let file_size_toml = toml::Value::from(file_size.clone());
-		if !cache_toml.exists() {
-			fs::write(&cache_toml, "")?;
-		}
+		let file_name = &self.file.to_str().unwrap().to_string();
+		let file_cache_exists: bool = self.cache.check_key_exists(file_name)
+			&& self.cache.check_file_exists(file_name)
+			&& self.cache.get_value(file_name).is_some();
+		let cached_file_size = if file_cache_exists {
+			self.cache.get_value(file_name).unwrap().clone()
+		} else {
+			toml::Value::String("-1".to_string())
+		};
 
-		let mut table =
-			toml::Table::from_str(&fs::read_to_string(&cache_toml)?)?;
-		if !table.contains_key(&file_uuid) {
-			table.insert(file_uuid.clone(), file_size_toml.clone());
-		}
-
-		let file_cache =
-			cache_dir.join(format!("{}.{}", &file_uuid, "nucache"));
-
-		if table[&file_uuid] == file_size_toml && file_cache.exists() {
+		if file_cache_exists && cached_file_size == file_size_toml {
 			log("Loading and executing script from cache...", self.quiet);
 			lua_state
-				.load(fs::read(&file_cache)?)
+				.load(self.cache.read_file(file_name)?)
 				.set_name(self.file.file_name().unwrap().to_str().unwrap())
 				.exec()?;
 			log("Success!", self.quiet);
-		} else if table[&file_uuid] != file_size_toml || !file_cache.exists() {
+		} else if cached_file_size != file_size_toml || !file_cache_exists {
 			let file_content = fs::read(&self.file)?;
 			log("Loading and executing script...", self.quiet);
 			lua_state
@@ -254,8 +271,8 @@ impl LuaFile
 				.set_name(self.file.file_name().unwrap().to_str().unwrap())
 				.exec()?;
 			log("Success! Saving script to cache...", self.quiet);
-			fs::write(
-				&file_cache,
+			self.cache.write_file(
+				file_name,
 				Compiler::new()
 					.set_debug_level(0)
 					.set_optimization_level(2)
@@ -263,13 +280,18 @@ impl LuaFile
 					.compile(&file_content),
 			)?;
 
-			table[&file_uuid] = file_size_toml.clone();
-			fs::write(&cache_toml, table.to_string())?;
+			self.cache.set_value(file_name, file_size_toml.clone())?;
 			log("Done.", self.quiet);
 		}
 
-		let lua_workspace: Self = lua_state.globals().get("workspace")?;
+		// Read back workspace values from Lua
+		let lua_workspace: LuaWorkspace =
+			lua_state.globals().get("workspace")?;
 		self.targets = lua_workspace.targets.clone();
+		self.cache.user_values = lua_workspace.cache.user_values;
+
+		// Write cache to disk
+		self.cache.flush()?;
 
 		log(
 			&format!(
@@ -310,7 +332,7 @@ impl LuaFile
 	}
 
 	fn build_target(
-		&self,
+		&mut self,
 		_target: &String,
 	) -> anyhow::Result<()>
 	{
@@ -320,7 +342,10 @@ impl LuaFile
 			log(&format!("Selecting target {}...", _target), self.quiet);
 			log(&format!("Building target {}...", _target), self.quiet);
 			let now = SystemTime::now();
-			self.targets.get(_target).unwrap().build(self)?;
+			self.targets
+				.get(_target)
+				.unwrap()
+				.build(&mut self.clone())?;
 			log(
 				&format!(
 					"Building target {} done in {}ms!",
@@ -334,89 +359,65 @@ impl LuaFile
 	}
 
 	fn require_url(
-		&self,
-		lua_state: &Lua,
-		url: String,
-	) -> anyhow::Result<()>
+		&mut self,
+		url: &String,
+	) -> anyhow::Result<Vec<u8>>
 	{
-		let file_uuid =
-			Uuid::new_v8(*url.as_bytes().last_chunk::<16>().unwrap())
-				.to_string();
-		let cache_dir = self.workspace.join("cache");
-		let cache_toml = cache_dir.join("cache.toml");
-		if !cache_toml.exists() {
-			fs::write(&cache_toml, format!("{}=\"-1\"", &file_uuid))?;
-		}
+		let file_cache_exists: bool = self.cache.check_key_exists(url)
+			&& self.cache.check_file_exists(url)
+			&& self.cache.get_value(url).is_some();
 
-		let mut table =
-			toml::Table::from_str(&fs::read_to_string(&cache_toml)?)?;
-		let file_cache =
-			cache_dir.join(format!("{}.{}", &file_uuid, "nucache"));
-
-		let response = reqwest::blocking::get(&url)?;
+		let response = reqwest::blocking::get(url)?;
 		if !response.status().is_success() {
-			if table.contains_key(&file_uuid) && file_cache.exists() {
-				Ok(lua_state
-					.load(fs::read(&file_cache)?)
-					.set_name(&url)
-					.exec()?)
+			if file_cache_exists {
+				Ok(self.cache.read_file(url)?)
 			} else {
-				Err(anyhow!(response.status()))?
+				Err(anyhow!(response.status()))
 			}
 		} else {
 			let file_size = response.content_length().unwrap_or(0).to_string();
 			let file_size_toml = toml::Value::from(file_size.clone());
-			if !table.contains_key(&file_uuid) {
-				table.insert(file_uuid.clone(), toml::Value::from("-1"));
-			}
+			let cached_file_size = if file_cache_exists {
+				self.cache.get_value(url).unwrap().clone()
+			} else {
+				toml::Value::String("-1".to_string())
+			};
 
-			if table[&file_uuid] == file_size_toml && file_cache.exists() {
-				Ok(lua_state
-					.load(fs::read(&file_cache)?)
-					.set_name(&url)
-					.exec()?)
-			} else if table[&file_uuid] != file_size_toml
-				|| !file_cache.exists()
-			{
-				let file_content = response.text()?;
-				lua_state.load(&file_content).set_name(&url).eval()?;
-				fs::write(
-					&file_cache,
+			if file_cache_exists && cached_file_size == file_size_toml {
+				Ok(self.cache.read_file(url)?)
+			} else {
+				let file_content = response.bytes()?;
+
+				self.cache.set_value(url, file_size_toml)?;
+				self.cache.write_file(
+					url,
 					Compiler::new()
 						.set_debug_level(0)
 						.set_optimization_level(2)
 						.set_coverage_level(2)
 						.compile(&file_content),
 				)?;
-				table[&file_uuid] = file_size_toml;
-				fs::write(&cache_toml, table.to_string())?;
-				Ok(())
-			} else {
-				Err(anyhow!("URL REQUIRE ERROR"))?
+
+				Ok(file_content.to_vec())
 			}
 		}
 	}
 
 	fn workspace_download_zip(
-		&self,
-		url: String,
+		&mut self,
+		url: &String,
 	) -> anyhow::Result<String>
 	{
 		log("Starting zip download...", self.quiet);
-		let path_str: String = format!(
-			// Where the archive will be extracted.
-			"{}/remote/{}",
-			self.workspace.to_str().unwrap_or("ERROR"),
-			Uuid::new_v8(*url.as_bytes().last_chunk::<16>().unwrap())
-		);
 
-		let path = Path::new(&path_str);
-
-		if path.exists() && path.is_dir() {
-			log(&format!("Found non-empty extract path on system! ({}) Not downloading. (This is okay!)", &path_str), self.quiet);
-			Ok(path.to_str().unwrap().to_string())
+		if self.cache.check_dir_exists(url) {
+			log(
+				&format!("Cache entry for [{}] found. \nNot downloading. This is okay!", url),
+				self.quiet,
+			);
+			Ok(self.cache.get_dir(url)?.to_str().unwrap().to_string())
 		} else {
-			let response = reqwest::blocking::get(&url)?;
+			let response = reqwest::blocking::get(url)?;
 			if response.status().is_success() {
 				log(
 					&format!(
@@ -425,14 +426,31 @@ impl LuaFile
 					),
 					self.quiet,
 				);
-				fs::create_dir_all(path)?;
+				let path = self.cache.get_dir(url)?;
 				log("Downloading & extracting archive...", self.quiet);
-				ZipArchive::new(Cursor::new(response.bytes()?))?.extract(path)?;
+				ZipArchive::new(Cursor::new(response.bytes()?))?
+					.extract(&path)?;
 				log("Done!", self.quiet);
 				Ok(path.to_str().unwrap().to_string())
 			} else {
 				Err(anyhow!(response.status()))?
 			}
+		}
+	}
+}
+
+impl<'lua> FromLua<'lua> for LuaWorkspace
+{
+	fn from_lua(
+		value: Value<'lua>,
+		_: &'lua Lua,
+	) -> mlua::Result<Self>
+	{
+		match value {
+			Value::UserData(user_data) => {
+				Ok(user_data.borrow::<Self>()?.clone())
+			}
+			_ => unreachable!(),
 		}
 	}
 }

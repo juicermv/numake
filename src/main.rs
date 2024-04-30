@@ -8,18 +8,19 @@ use clap::Parser;
 use mlua::Lua;
 
 use crate::{
-	config::{
+	cli_args::{
 		Cli,
 		Subcommands,
 	},
-	lua_file::LuaFile,
+	lua_workspace::LuaWorkspace,
 };
 
-mod config;
+mod cli_args;
 mod error;
-mod lua_file;
+mod lua_workspace;
 mod target;
 mod util;
+mod cache;
 
 #[cfg(not(test))]
 fn main() -> anyhow::Result<()>
@@ -31,19 +32,19 @@ fn main() -> anyhow::Result<()>
 	
 	match &cli.command {
 		Subcommands::Build(args) => {
-			let mut proj = LuaFile::new(args)?;
+			let mut proj = LuaWorkspace::new(args)?;
 			proj.process(&lua)?;
 			proj.build()?;
 		}
 
 		Subcommands::Inspect(args) => {
-			let mut proj = LuaFile::new_inspect(args)?;
+			let mut proj = LuaWorkspace::new_inspect(args)?;
 			proj.process(&lua)?;
 
 			println!("{}", serde_json::to_string_pretty(&proj)?);
 		}
 		Subcommands::List(args) => {
-			let mut proj = LuaFile::new_dummy(args)?;
+			let mut proj = LuaWorkspace::new_dummy(args)?;
 			proj.process(&lua)?;
 			println!("\nAvailable targets: {}", proj.list_targets()?);
 		}
@@ -58,8 +59,8 @@ mod tests
 	use mlua::Lua;
 
 	use crate::{
-		config::NuMakeArgs,
-		lua_file::LuaFile,
+		cli_args::NuMakeArgs,
+		lua_workspace::LuaWorkspace,
 	};
 
 	#[test]
@@ -76,7 +77,7 @@ mod tests
 			quiet: false,
 		};
 
-		let mut proj = LuaFile::new(&args)?;
+		let mut proj = LuaWorkspace::new(&args)?;
 		proj.process(&Lua::new())?;
 		proj.build()?;
 
@@ -100,7 +101,7 @@ mod tests
 			quiet: false,
 		};
 
-		let mut proj = LuaFile::new(&args)?;
+		let mut proj = LuaWorkspace::new(&args)?;
 		proj.process(&Lua::new())?;
 		proj.build()?;
 

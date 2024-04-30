@@ -1,4 +1,6 @@
-workspace:require_url("https://pastebin.com/raw/rXKD6pjn") -- Just a test, doesn't actually do anything.
+if workspace:get("test") == nil then
+    workspace:set("test", 1234)
+end
 
 sdl_path = workspace:download_zip("https://github.com/libsdl-org/SDL/releases/download/release-2.30.2/SDL2-devel-2.30.2-mingw.zip") .. "/SDL2-2.30.2/x86_64-w64-mingw32"
 mingw = workspace:create_target("mingw")
@@ -46,3 +48,5 @@ gcc:add_dir("src")
 
 workspace:register_target(gcc)
 workspace:register_target(mingw)
+
+print(workspace:get("test"))

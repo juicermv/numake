@@ -23,12 +23,3 @@ pub const NUMAKE_ERROR: NuMakeErrorType<'static> = NuMakeErrorType {
 	MSVC_WINDOWS_ONLY: "MSVC targets can only be compiled on windows!",
 	VC_NOT_FOUND: "Visual C/C++ installation not found! Make sure you have Visual Studio/Build Tools installed!",
 };
-
-pub fn to_lua_result<T>(val: anyhow::Result<T>) -> mlua::Result<T>
-{
-	if val.is_err() {
-		Err(mlua::Error::external(val.err().unwrap()))?
-	} else {
-		Ok(val.ok().unwrap())
-	}
-}
