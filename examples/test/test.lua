@@ -34,7 +34,7 @@ mingw.libraries = {
 mingw.compiler_flags = {"--verbose", "-mwindows", "-Wl,--nxcompat", "-Wl,--high-entropy-va", "-static", "-Wl,-Bstatic"}
 mingw.linker_flags = mingw.compiler_flags
 mingw.assets = { [sdl_path .. "/bin/SDL2.dll"] = "SDL2.dll" }
-mingw:add_dir("src")
+mingw.files = workspace:walk_dir("src")
 
 gcc = workspace:create_target("gcc")
 gcc.output = "test"
@@ -44,7 +44,7 @@ gcc.libraries = {
 gcc.compiler = "g++"
 gcc.linker = gcc.compiler
 
-gcc:add_dir("src")
+gcc.files = workspace:walk_dir("src")
 
 workspace:register_target(gcc)
 workspace:register_target(mingw)

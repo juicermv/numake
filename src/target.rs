@@ -11,7 +11,16 @@ use std::{
 };
 
 use anyhow::anyhow;
-use mlua::{Error, FromLua, Lua, prelude::LuaError, Table, UserData, UserDataFields, UserDataMethods, Value};
+use mlua::{
+	Error,
+	FromLua,
+	Lua,
+	Table,
+	UserData,
+	UserDataFields,
+	UserDataMethods,
+	Value,
+};
 use pathdiff::diff_paths;
 use serde::Serialize;
 use tempfile::tempdir;
@@ -19,9 +28,12 @@ use tempfile::tempdir;
 use crate::{
 	error::NUMAKE_ERROR,
 	lua_workspace::LuaWorkspace,
-	util::log,
+	util::{
+		download_vswhere,
+		log,
+		to_lua_result,
+	},
 };
-use crate::util::{download_vswhere, to_lua_result};
 
 #[derive(Clone, Serialize)]
 pub struct Target
@@ -34,7 +46,6 @@ pub struct Target
 	pub defines: Vec<String>,
 
 	pub assets: HashMap<PathBuf, String>,
-
 	pub output: Option<String>,
 
 	pub files: Vec<PathBuf>,
@@ -45,12 +56,19 @@ pub struct Target
 	pub name: String,
 
 	workdir: PathBuf,
-	msvc_arch: Option<String>,
 
 	#[serde(skip_serializing)]
 	quiet: bool,
+
+	// --- MSVC --- \\
 	#[serde(skip_serializing)]
 	msvc: bool,
+
+	pub msvc_resources: Vec<PathBuf>,
+	pub msvc_def_files: Vec<PathBuf>,
+	pub msvc_rc_flags: Vec<String>,
+	msvc_arch: Option<String>,
+	msvc_static_lib: bool,
 }
 
 impl Target
@@ -82,6 +100,10 @@ impl Target
 			msvc,
 			msvc_arch: None,
 			quiet,
+			msvc_resources: Vec::new(),
+			msvc_def_files: Vec::new(),
+			msvc_rc_flags: Vec::new(),
+			msvc_static_lib: false,
 		})
 	}
 
@@ -104,38 +126,36 @@ impl Target
 		Ok(())
 	}
 
-	pub fn add_dir(
+	pub fn add_rc_file(
 		&mut self,
-		path_buf: PathBuf,
-		recursive: bool,
-		filter: &Option<Vec<String>>,
+		file: PathBuf,
 	) -> anyhow::Result<()>
 	{
-		if !path_buf.starts_with(&self.workdir) {
-			Err(LuaError::runtime(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
+		if !file.starts_with(&self.workdir) {
+			Err(mlua::Error::runtime(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
 		}
 
-		for entry in fs::read_dir(path_buf)? {
-			let path = dunce::canonicalize(entry?.path())?;
-			if path.is_dir() && recursive {
-				self.add_dir(path.clone(), true, filter)?
-			}
-			if path.is_file() {
-				if !filter.is_none() {
-					if filter.clone().unwrap().contains(
-						&path
-							.extension()
-							.unwrap_or("".as_ref())
-							.to_str()
-							.unwrap()
-							.to_string(),
-					) {
-						self.add_file(path.clone())?
-					}
-				} else {
-					self.add_file(path.clone())?
-				}
-			}
+		if file.is_file() {
+			self.msvc_resources.push(file.clone());
+		} else {
+			Err(mlua::Error::runtime(NUMAKE_ERROR.ADD_FILE_IS_DIRECTORY))?
+		}
+		Ok(())
+	}
+
+	pub fn add_def_file(
+		&mut self,
+		file: PathBuf,
+	) -> anyhow::Result<()>
+	{
+		if !file.starts_with(&self.workdir) {
+			Err(mlua::Error::runtime(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
+		}
+
+		if file.is_file() {
+			self.msvc_resources.push(file.clone());
+		} else {
+			Err(mlua::Error::runtime(NUMAKE_ERROR.ADD_FILE_IS_DIRECTORY))?
 		}
 		Ok(())
 	}
@@ -165,7 +185,10 @@ impl Target
 		winsdk_version: Option<String>,
 	) -> anyhow::Result<HashMap<String, String>>
 	{
-		let vswhere_path = workspace.cache.get_dir(&"vswhere".to_string())?.join("vswhere.exe");
+		let vswhere_path = workspace
+			.cache
+			.get_dir(&"vswhere".to_string())?
+			.join("vswhere.exe");
 		if !vswhere_path.exists() {
 			download_vswhere(&vswhere_path)?;
 		}
@@ -456,6 +479,10 @@ impl Target
 			.workspace
 			.join(format!("out/{}", &self.name));
 
+		let res_dir: PathBuf = parent_workspace
+			.workspace
+			.join(format!("res/{}", &self.name));
+
 		let msvc_env = self.setup_msvc(
 			parent_workspace,
 			self.msvc_arch.clone(),
@@ -469,6 +496,10 @@ impl Target
 
 		if !out_dir.exists() {
 			fs::create_dir_all(&out_dir)?;
+		}
+
+		if !res_dir.exists() {
+			fs::create_dir_all(&res_dir)?;
 		}
 
 		let mut o_files: Vec<String> = Vec::new(); // Can't assume all compilers support wildcards.
@@ -502,11 +533,11 @@ impl Target
 			o_files.push(o_file.to_str().unwrap().to_string());
 
 			for incl in self.include_paths.clone() {
-				compiler_args.push(format!("-I{incl}"))
+				compiler_args.push(format!("-I{incl}"));
 			}
 
 			for define in self.defines.clone() {
-				compiler_args.push(format!("-D{define}"))
+				compiler_args.push(format!("-D{define}"));
 			}
 
 			for flag in self.compiler_flags.clone() {
@@ -543,32 +574,148 @@ impl Target
 			}
 		}
 
-		let mut linker = Command::new("cl");
+		for resource_file in self.msvc_resources.clone() {
+			let mut resource_compiler = Command::new("rc");
+
+			let res_file = res_dir.join(
+				diff_paths(&resource_file, self.workdir.clone())
+					.unwrap()
+					.to_str()
+					.unwrap()
+					.to_string() + ".res",
+			);
+
+			if !res_file.parent().unwrap().exists() {
+				fs::create_dir_all(res_file.parent().unwrap())?;
+			}
+
+			let mut res_compiler_args = Vec::from([
+				"-v".to_string(),
+				format!("-fo{}", res_file.to_str().unwrap()),
+			]);
+
+			for incl in self.include_paths.clone() {
+				res_compiler_args.push(format!("-i{incl}"));
+			}
+
+			for define in self.defines.clone() {
+				res_compiler_args.push(format!("-d{define}"));
+			}
+
+			res_compiler_args
+				.push(resource_file.to_str().unwrap_or("ERROR").to_string());
+
+			let status = resource_compiler
+				.stdout(
+					if self.quiet {
+						Stdio::null()
+					} else {
+						Stdio::inherit()
+					},
+				)
+				.stderr(
+					if self.quiet {
+						Stdio::null()
+					} else {
+						Stdio::inherit()
+					},
+				)
+				.envs(&msvc_env)
+				.args(&res_compiler_args)
+				.current_dir(&parent_workspace.working_directory)
+				.status()?;
+
+			log(&format!("\nrc exited with {}.\n", status), self.quiet);
+
+			if !status.success() {
+				log("Aborting...", self.quiet);
+				Err(anyhow!(status))?
+			}
+
+			let mut cvtres = Command::new("cvtres");
+
+			let rbj_file = obj_dir.join(
+				diff_paths(&resource_file, self.workdir.clone())
+					.unwrap()
+					.to_str()
+					.unwrap()
+					.to_string() + ".rbj",
+			);
+
+			if !rbj_file.parent().unwrap().exists() {
+				fs::create_dir_all(rbj_file.parent().unwrap())?;
+			}
+
+			let mut cvtres_args =
+				Vec::from([format!("/OUT:{}", rbj_file.to_str().unwrap())]);
+
+			o_files.push(rbj_file.to_str().unwrap().to_string());
+
+			for define in self.defines.clone() {
+				cvtres_args.push(format!("/DEFINE:{define}"));
+			}
+
+			cvtres_args.push(res_file.to_str().unwrap_or("ERROR").to_string());
+
+			let status = cvtres
+				.stdout(
+					if self.quiet {
+						Stdio::null()
+					} else {
+						Stdio::inherit()
+					},
+				)
+				.stderr(
+					if self.quiet {
+						Stdio::null()
+					} else {
+						Stdio::inherit()
+					},
+				)
+				.envs(&msvc_env)
+				.args(&cvtres_args)
+				.current_dir(&parent_workspace.working_directory)
+				.status()?;
+
+			log(&format!("\ncvtres exited with {}.\n", status), self.quiet);
+
+			if !status.success() {
+				log("Aborting...", self.quiet);
+				Err(anyhow!(status))?
+			}
+		}
+
+		let mut linker =
+			Command::new(if self.msvc_static_lib { "lib" } else { "link" });
 		let mut linker_args = Vec::new();
 
-		linker_args.append(&mut o_files);
-
-		linker_args.append(&mut self.libs.clone());
-
-		linker_args.push("/link".to_string());
-
 		linker_args.push(format!(
-			"/out:{}/{}",
+			"/OUT:{}/{}",
 			&out_dir.to_str().unwrap_or("ERROR"),
 			&output.unwrap_or("out".to_string())
 		));
 
 		for path in self.lib_paths.clone() {
-			linker_args.push(format!("/LIBPATH:{path}"))
+			linker_args.push(format!("/LIBPATH:{path}"));
+		}
+
+		for def_file in self.msvc_def_files.clone() {
+			linker_args
+				.push(format!("/DEF:{}", def_file.to_str().unwrap_or("ERROR")));
 		}
 
 		for flag in self.linker_flags.clone() {
-			linker_args.push(flag)
+			linker_args.push(flag);
 		}
+
+		linker_args.append(&mut o_files);
+
+		linker_args.append(&mut self.libs.clone());
 
 		log(
 			&format!(
-				"\ncl exited with {}. \n",
+				"\n{} exited with {}. \n",
+				if self.msvc_static_lib { "lib" } else { "link" },
 				linker
 					.stdout(
 						if self.quiet {
@@ -802,6 +949,96 @@ impl UserData for Target
 		}
 
 		{
+			fields.add_field_method_get("msvc_resource_files", |_, this| {
+				let return_val: Vec<String> = this
+					.msvc_resources
+					.clone()
+					.into_iter()
+					.map(|value| {
+						return diff_paths(value, this.workdir.clone())
+							.unwrap()
+							.to_str()
+							.unwrap()
+							.to_string();
+					})
+					.collect();
+				Ok(return_val)
+			});
+
+			fields.add_field_method_set(
+				"msvc_resource_files",
+				|_, this, val: Vec<String>| {
+					for path in val {
+						to_lua_result(this.add_rc_file(dunce::canonicalize(
+							this.workdir.join(path),
+						)?))?
+					}
+
+					Ok(())
+				},
+			);
+		}
+
+		{
+			fields.add_field_method_get("msvc_rc_flags", |_, this| {
+				Ok(this.msvc_rc_flags.clone())
+			});
+
+			fields.add_field_method_set(
+				"msvc_rc_flags",
+				|_, this, val: Vec<String>| {
+					this.msvc_rc_flags = val;
+					Ok(())
+				},
+			);
+		}
+
+		{
+			fields.add_field_method_get("msvc_def_files", |_, this| {
+				let return_val: Vec<String> = this
+					.msvc_def_files
+					.clone()
+					.into_iter()
+					.map(|value| {
+						return diff_paths(value, this.workdir.clone())
+							.unwrap()
+							.to_str()
+							.unwrap()
+							.to_string();
+					})
+					.collect();
+				Ok(return_val)
+			});
+
+			fields.add_field_method_set(
+				"msvc_def_files",
+				|_, this, val: Vec<String>| {
+					for path in val {
+						to_lua_result(this.add_def_file(dunce::canonicalize(
+							this.workdir.join(path),
+						)?))?
+					}
+
+					Ok(())
+				},
+			);
+		}
+
+		{
+			fields.add_field_method_get("msvc_static_library", |_, this| {
+				Ok(this.msvc_static_lib)
+			});
+
+			fields.add_field_method_set(
+				"msvc_static_library",
+				|_, this, new_val: bool| {
+					this.msvc_static_lib = new_val;
+					Ok(())
+				},
+			);
+		}
+
+		{
 			fields.add_field_method_get("assets", |_, this| {
 				Ok(this
 					.assets
@@ -834,18 +1071,7 @@ impl UserData for Target
 
 	fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M)
 	{
-		methods.add_method_mut(
-			"add_dir",
-			|_,
-			 this,
-			 (path, recursive, filter): (String, bool, Option<Vec<String>>)| {
-				to_lua_result(this.add_dir(
-					dunce::canonicalize(this.workdir.join(path))?,
-					recursive,
-					&filter,
-				))
-			},
-		);
+		// Nothing at the moment!
 	}
 }
 

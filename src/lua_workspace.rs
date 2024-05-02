@@ -14,7 +14,10 @@ use mlua::{
 	Compiler,
 	FromLua,
 	Lua,
-	prelude::LuaValue,
+	prelude::{
+		LuaError,
+		LuaValue,
+	},
 	UserData,
 	UserDataFields,
 	UserDataMethods,
@@ -130,6 +133,27 @@ impl UserData for LuaWorkspace
 				Ok(None)
 			}
 		});
+
+		methods.add_method(
+			"walk_dir",
+			|_,
+			 this,
+			 (path, recursive, filter): (String, bool, Option<Vec<String>>)| {
+				let paths = to_lua_result(this.walk_dir(
+					dunce::canonicalize(this.working_directory.join(path))?,
+					recursive,
+					&filter,
+				))?
+					.clone();
+
+				let paths_str = paths
+					.iter()
+					.map(|path| path.to_str().unwrap_or_default().to_string())
+					.collect::<Vec<String>>();
+
+				Ok(paths_str.clone())
+			},
+		);
 
 		methods.add_method("query", |_, _, ()| {
 			let mut buffer = String::new();
@@ -436,6 +460,47 @@ impl LuaWorkspace
 				Err(anyhow!(response.status()))?
 			}
 		}
+	}
+
+	pub fn walk_dir(
+		&self,
+		path_buf: PathBuf,
+		recursive: bool,
+		filter: &Option<Vec<String>>,
+	) -> anyhow::Result<Vec<PathBuf>>
+	{
+		let mut path_vec: Vec<PathBuf> = Vec::new();
+
+		if !path_buf.starts_with(&self.working_directory) {
+			Err(LuaError::runtime(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
+		}
+
+		for entry in fs::read_dir(path_buf)? {
+			let path = dunce::canonicalize(entry?.path())?;
+			if path.is_dir() && recursive {
+				path_vec.append(
+					&mut self.walk_dir(path.clone(), true, filter)?.clone(),
+				)
+			}
+			if path.is_file() {
+				if !filter.is_none() {
+					if filter.clone().unwrap().contains(
+						&path
+							.extension()
+							.unwrap_or("".as_ref())
+							.to_str()
+							.unwrap()
+							.to_string(),
+					) {
+						path_vec.push(path.clone());
+					}
+				} else {
+					path_vec.push(path.clone());
+				}
+			}
+		}
+
+		Ok(path_vec)
 	}
 }
 
