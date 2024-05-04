@@ -17,7 +17,6 @@ use mlua::{
 	Table,
 	UserData,
 	UserDataFields,
-	UserDataMethods,
 	Value,
 };
 use pathdiff::diff_paths;
@@ -493,11 +492,6 @@ impl UserData for GenericTarget
 				})
 			});
 		}
-	}
-
-	fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M)
-	{
-		// Nothing at the moment!
 	}
 }
 

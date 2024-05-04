@@ -11,15 +11,7 @@ use std::{
 };
 
 use anyhow::anyhow;
-use mlua::{
-	FromLua,
-	Lua,
-	Table,
-	UserData,
-	UserDataFields,
-	UserDataMethods,
-	Value,
-};
+use mlua::{FromLua, Lua, Table, UserData, UserDataFields, Value};
 use pathdiff::diff_paths;
 use serde::Serialize;
 use tempfile::tempdir;
@@ -806,11 +798,6 @@ impl UserData for MSVCTarget
 				})
 			});
 		}
-	}
-
-	fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M)
-	{
-		// Nothing at the moment!
 	}
 }
 

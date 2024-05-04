@@ -1,5 +1,3 @@
-use std::fmt::{Debug, Display};
-
 use mlua::{FromLua, IntoLua, Lua, Value};
 use serde::Serialize;
 
@@ -61,7 +59,7 @@ impl<'lua> IntoLua<'lua> for Target {
 }
 
 impl<'lua> FromLua<'lua> for Target {
-	fn from_lua(value: Value<'lua>, lua: &'lua Lua) -> mlua::Result<Self> {
+	fn from_lua(value: Value<'lua>, _: &'lua Lua) -> mlua::Result<Self> {
 		match value {
 			Value::UserData(user_data) => {
 				if user_data.is::<MSVCTarget>() {
