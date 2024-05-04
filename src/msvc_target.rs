@@ -258,7 +258,7 @@ impl TargetTrait for MSVCTarget {
 	#[cfg(not(windows))]
 	fn build(
 		&self,
-		_: &LuaWorkspace,
+		_: &mut LuaWorkspace,
 	) -> anyhow::Result<()>
 	{
 		Err(anyhow!(&NUMAKE_ERROR.MSVC_WINDOWS_ONLY))
