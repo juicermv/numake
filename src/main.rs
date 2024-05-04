@@ -18,9 +18,11 @@ use crate::{
 mod cli_args;
 mod error;
 mod lua_workspace;
-mod target;
+mod generic_target;
 mod util;
 mod cache;
+mod target;
+mod msvc_target;
 
 #[cfg(not(test))]
 fn main() -> anyhow::Result<()>

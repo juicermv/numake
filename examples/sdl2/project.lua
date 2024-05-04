@@ -32,7 +32,7 @@ msvc.linker_flags = { "/SUBSYSTEM:WINDOWS" }
 msvc.output = "test.exe"
 msvc.definitions = { "MSVC" }
 msvc.files = { "main.cpp" }
-msvc.msvc_arch = "x64"
+msvc.arch = "x64"
 --- END MSVC 64 BIT TARGET
 
 --- MSVC 32 BIT TARGET
@@ -55,7 +55,7 @@ msvc_x86.linker_flags = { "/SUBSYSTEM:WINDOWS" }
 msvc_x86.output = "test.exe"
 msvc_x86.definitions = { "MSVC" }
 msvc_x86.files = { "main.cpp" }
-msvc_x86.msvc_arch = "x86"
+msvc_x86.arch = "x86"
 --- END MSVC 32 BIT TARGET
 
 

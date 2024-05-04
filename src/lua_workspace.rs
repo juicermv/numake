@@ -10,19 +10,10 @@ use std::{
 };
 
 use anyhow::anyhow;
-use mlua::{
-	Compiler,
-	FromLua,
-	Lua,
-	prelude::{
-		LuaError,
-		LuaValue,
-	},
-	UserData,
-	UserDataFields,
-	UserDataMethods,
-	Value,
-};
+use mlua::{Compiler, FromLua, Lua, prelude::{
+	LuaError,
+	LuaValue,
+}, UserData, UserDataFields, UserDataMethods, Value};
 use serde::Serialize;
 use zip::ZipArchive;
 
@@ -34,7 +25,7 @@ use crate::{
 		NuMakeArgs,
 	},
 	error::NUMAKE_ERROR,
-	target::Target,
+	generic_target::GenericTarget,
 	util::{
 		into_lua_value,
 		into_toml_value,
@@ -42,6 +33,8 @@ use crate::{
 		to_lua_result,
 	},
 };
+use crate::msvc_target::MSVCTarget;
+use crate::target::{Target, TargetTrait};
 
 #[derive(Clone, Serialize)]
 pub struct LuaWorkspace
@@ -79,31 +72,27 @@ impl UserData for LuaWorkspace
 	fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M)
 	{
 		methods.add_method("create_target", |_, this, name: String| {
-			to_lua_result(Target::new(
-				name.clone(),
+			to_lua_result(GenericTarget::new(
+				name,
 				this.toolset_compiler.clone(),
 				this.toolset_linker.clone(),
 				this.output.clone(),
 				this.working_directory.clone(),
-				false,
 				this.quiet,
 			))
 		});
 
 		methods.add_method("create_msvc_target", |_, this, name: String| {
-			to_lua_result(Target::new(
-				name.clone(),
-				None,
-				None,
+			to_lua_result(MSVCTarget::new(
+				name,
 				this.output.clone(),
 				this.working_directory.clone(),
-				true,
 				this.quiet,
 			))
 		});
 
 		methods.add_method_mut("register_target", |_, this, target: Target| {
-			Ok(this.targets.insert(target.name.clone(), target))
+			Ok(this.targets.insert(target.get_name(), target))
 		});
 
 		methods.add_method_mut("download_zip", |_, this, url: String| {
@@ -334,10 +323,13 @@ impl LuaWorkspace
 			.targets
 			.iter()
 			.map(|(name, target)| {
-				if !target.is_msvc() {
-					format!("{}: generic", name)
-				} else {
-					format!("{}: msvc", name)
+				match target {
+					Target::Generic(_) => {
+						format!("{} [GENERIC], ", name)
+					}
+					Target::MSVC(_) => {
+						format!("{} [MSVC], ", name)
+					}
 				}
 			})
 			.collect())
