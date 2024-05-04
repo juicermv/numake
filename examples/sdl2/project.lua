@@ -87,7 +87,7 @@ mingw.libraries = {
     "uuid"
 }
 
-mingw.compiler_flags = {"---verbose", "-mwindows", "-static", "-Wl,-Bstatic"}
+mingw.compiler_flags = {"--verbose", "-mwindows", "-static", "-Wl,-Bstatic"}
 mingw.linker_flags = mingw.compiler_flags
 mingw.assets = { [sdl_path_mingw .. "/x86_64-w64-mingw32/bin/SDL2.dll"] = "SDL2.dll" }
 mingw.files = { "main.cpp "}
@@ -121,7 +121,7 @@ mingw_i686.libraries = {
     "uuid"
 }
 
-mingw_i686.compiler_flags = {"---verbose", "-mwindows", "-static", "-Wl,-Bstatic"}
+mingw_i686.compiler_flags = {"--verbose", "-mwindows", "-static", "-Wl,-Bstatic"}
 mingw_i686.linker_flags = mingw_i686.compiler_flags
 mingw_i686.assets = { [sdl_path_mingw .. "/i686-w64-mingw32/bin/SDL2.dll"] = "SDL2.dll" }
 mingw_i686.files = { "main.cpp "}
@@ -136,7 +136,7 @@ if workspace.arguments["linux"] ~= nil then
     gcc.definitions = { "linux" }
 end
 
-gcc.compiler_flags = {"---verbose"}
+gcc.compiler_flags = {"--verbose"}
 gcc.linker_flags = gcc.compiler_flags
 gcc.compiler = "g++"
 gcc.linker = gcc.compiler
