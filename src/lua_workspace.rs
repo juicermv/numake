@@ -149,6 +149,10 @@ impl UserData for LuaWorkspace
 			stdin().read_line(&mut buffer)?;
 			Ok(buffer)
 		});
+
+		methods.add_method("env", |_, _, ()| {
+			Ok(std::env::vars().collect::<HashMap<String, String>>())
+		});
 	}
 }
 

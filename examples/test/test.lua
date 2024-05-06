@@ -1,3 +1,5 @@
+inspect = workspace:require_url("https://raw.githubusercontent.com/kikito/inspect.lua/master/inspect.lua")
+
 if workspace:get("test") == nil then
     workspace:set("test", 1234)
 end
@@ -50,3 +52,4 @@ workspace:register_target(gcc)
 workspace:register_target(mingw)
 
 print(workspace:get("test"))
+print(inspect(workspace:env()))
