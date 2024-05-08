@@ -1,11 +1,8 @@
 use std::{
 	collections::HashMap,
 	fs,
-	path::Path,
-	process::{
-		Command,
-		ExitStatus,
-	},
+	path::Path
+	,
 };
 
 use anyhow::anyhow;
@@ -15,8 +12,6 @@ use mlua::{
 	Lua,
 };
 use sha256::digest;
-
-use crate::ui::NumakeUI;
 
 pub fn hash_string(val: &String) -> String { digest(val).to_string() }
 
@@ -117,20 +112,6 @@ pub fn download_vswhere<P: AsRef<Path>>(path: &P) -> anyhow::Result<()>
 	} else {
 		Err(anyhow!(response.status()))
 	}
-}
-
-pub fn execute(
-	ui: &NumakeUI,
-	cmd: &mut Command,
-) -> anyhow::Result<ExitStatus>
-{
-	let output = cmd.output()?;
-	let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-	if !ui.quiet && !stdout.is_empty() {
-		ui.progress_manager.println(ui.format_warn(stdout))?;
-	}
-
-	Ok(output.status)
 }
 
 pub fn args_to_map(args: Vec<String>) -> HashMap<String, Option<String>>

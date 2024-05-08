@@ -38,6 +38,31 @@ mingw.linker_flags = mingw.compiler_flags
 mingw.assets = { [sdl_path .. "/bin/SDL2.dll"] = "SDL2.dll" }
 mingw.files = workspace:walk_dir("src")
 
+sdl_path_msvc = workspace:download_zip("https:/github.com/libsdl-org/SDL/releases/download/release-2.30.2/SDL2-devel-2.30.2-VC.zip")
+
+msvc = workspace:create_msvc_target("msvc")
+msvc.include_paths = {
+    sdl_path_msvc .. "/SDL2-2.30.2/include"
+}
+
+msvc.libraries = {
+    "shell32.lib",
+    "SDL2.lib",
+    "SDL2main.lib"
+}
+
+msvc.library_paths = {
+    sdl_path_msvc .. "/SDL2-2.30.2/lib/x64",
+}
+
+msvc.linker_flags = { "/SUBSYSTEM:WINDOWS" }
+msvc.output = "test.exe"
+msvc.definitions = { "MSVC" }
+msvc.files = workspace:walk_dir("src")
+msvc.arch = "x64"
+
+
+
 gcc = workspace:create_target("gcc")
 gcc.output = "test"
 gcc.libraries = {
@@ -50,6 +75,7 @@ gcc.files = workspace:walk_dir("src")
 
 workspace:register_target(gcc)
 workspace:register_target(mingw)
+workspace:register_target(msvc)
 
 print(workspace:get("test"))
 print(inspect(workspace:env()))

@@ -2,8 +2,12 @@
 #include <iostream>
 #include <algorithm>
 
-#define SDL_MAIN_HANDLED
-#include <SDL2/SDL.h>
+#ifndef MSVC
+    #define SDL_MAIN_HANDLED
+    #include <SDL2/SDL.h>
+#else
+    #include <SDL.h>
+#endif
 
 int main(int argc, char* argv[])
 {

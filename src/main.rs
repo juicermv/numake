@@ -136,4 +136,29 @@ mod tests
 		assert_eq!(test_exec.status()?.code(), Some(0));
 		Ok(())
 	}
+
+	#[test]
+	fn msvc_build() -> anyhow::Result<()>
+	{
+		let args: NuMakeArgs = NuMakeArgs {
+			target: "msvc".to_string(),
+			toolset_compiler: None,
+			toolset_linker: None,
+			file: "test.lua".to_string(),
+			output: None,
+			workdir: "examples/test".to_string(),
+			arguments: Some(vec![]),
+			quiet: false,
+		};
+
+		let mut proj = LuaWorkspace::new(&args)?;
+		proj.process(&Lua::new())?;
+		proj.build()?;
+
+		let mut test_exec = std::process::Command::new(
+			"examples/test/.numake/out/msvc/test.exe",
+		);
+		assert_eq!(test_exec.status()?.code(), Some(0));
+		Ok(())
+	}
 }

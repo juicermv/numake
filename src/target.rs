@@ -1,22 +1,36 @@
+use std::process::{
+	Command,
+	ExitStatus,
+};
+
 use indicatif::ProgressBar;
-use mlua::{FromLua, IntoLua, Lua, Value};
+use mlua::{
+	FromLua,
+	IntoLua,
+	Lua,
+	Value,
+};
 use serde::Serialize;
 
 use crate::{
 	generic_target::GenericTarget,
 	lua_workspace::LuaWorkspace,
+	msvc_target::MSVCTarget,
 };
-use crate::msvc_target::MSVCTarget;
 
 pub trait TargetTrait
 {
 	fn build(
 		&self,
 		parent_workspace: &mut LuaWorkspace,
-		progress: &ProgressBar
+		progress: &ProgressBar,
 	) -> anyhow::Result<()>;
-}
 
+	fn execute(
+		&self,
+		cmd: &mut Command,
+	) -> anyhow::Result<ExitStatus>;
+}
 
 #[derive(Clone, Serialize)]
 pub enum Target
@@ -25,55 +39,76 @@ pub enum Target
 	MSVC(MSVCTarget),
 }
 
-impl Target {
-	pub fn get_name(&self) -> String {
+impl Target
+{
+	pub fn get_name(&self) -> String
+	{
 		match self {
-			Target::Generic(target) => {
-				target.name.clone()
-			}
-			Target::MSVC(target) => {
-				target.name.clone()
-			}
+			Target::Generic(target) => target.name.clone(),
+			Target::MSVC(target) => target.name.clone(),
 		}
 	}
 }
 
-impl TargetTrait for Target {
-	fn build(&self, parent_workspace: &mut LuaWorkspace, progress: &ProgressBar) -> anyhow::Result<()> {
+impl TargetTrait for Target
+{
+	fn build(
+		&self,
+		parent_workspace: &mut LuaWorkspace,
+		progress: &ProgressBar,
+	) -> anyhow::Result<()>
+	{
 		match self {
-			Target::Generic(target) => {
-				target.build(parent_workspace, progress)
-			}
-			Target::MSVC(target) => {
-				target.build(parent_workspace, progress)
-			}
+			Target::Generic(target) => target.build(parent_workspace, progress),
+			Target::MSVC(target) => target.build(parent_workspace, progress),
+		}
+	}
+
+	fn execute(
+		&self,
+		cmd: &mut Command,
+	) -> anyhow::Result<ExitStatus>
+	{
+		match self {
+			Target::Generic(target) => target.execute(cmd),
+			Target::MSVC(target) => target.execute(cmd),
 		}
 	}
 }
 
-impl<'lua> IntoLua<'lua> for Target {
-	fn into_lua(self, lua: &'lua Lua) -> mlua::Result<Value<'lua>> {
+impl<'lua> IntoLua<'lua> for Target
+{
+	fn into_lua(
+		self,
+		lua: &'lua Lua,
+	) -> mlua::Result<Value<'lua>>
+	{
 		match self {
-			Target::Generic(target) => { target.into_lua(lua) }
-			Target::MSVC(target) => { target.into_lua(lua) }
+			Target::Generic(target) => target.into_lua(lua),
+			Target::MSVC(target) => target.into_lua(lua),
 		}
 	}
 }
 
-impl<'lua> FromLua<'lua> for Target {
-	fn from_lua(value: Value<'lua>, _: &'lua Lua) -> mlua::Result<Self> {
+impl<'lua> FromLua<'lua> for Target
+{
+	fn from_lua(
+		value: Value<'lua>,
+		_: &'lua Lua,
+	) -> mlua::Result<Self>
+	{
 		match value {
 			Value::UserData(user_data) => {
 				if user_data.is::<MSVCTarget>() {
-					Ok(
-						Self::MSVC(user_data.borrow::<MSVCTarget>()?.clone())
-					)
+					Ok(Self::MSVC(user_data.borrow::<MSVCTarget>()?.clone()))
 				} else if user_data.is::<GenericTarget>() {
-					Ok(
-						Self::Generic(user_data.borrow::<GenericTarget>()?.clone())
-					)
+					Ok(Self::Generic(
+						user_data.borrow::<GenericTarget>()?.clone(),
+					))
 				} else {
-					Err(mlua::Error::runtime("Tried to convert invalid target type to Target!"))
+					Err(mlua::Error::runtime(
+						"Tried to convert invalid target type to Target!",
+					))
 				}
 			}
 

@@ -1,9 +1,11 @@
 use std::{
 	collections::HashMap,
-	fs
-	,
+	fs,
 	path::PathBuf,
-	process::Command,
+	process::{
+		Command,
+		ExitStatus,
+	},
 };
 
 use anyhow::anyhow;
@@ -24,10 +26,7 @@ use crate::{
 	lua_workspace::LuaWorkspace,
 	target::TargetTrait,
 	ui::NumakeUI,
-	util::{
-		execute,
-		to_lua_result,
-	},
+	util::to_lua_result,
 };
 
 #[derive(Clone, Serialize)]
@@ -211,8 +210,7 @@ impl TargetTrait for GenericTarget
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			let status = execute(
-				&self.ui,
+			let status = self.execute(
 				compiler
 					.args(&compiler_args)
 					.current_dir(&parent_workspace.working_directory),
@@ -255,8 +253,7 @@ impl TargetTrait for GenericTarget
 			linker_args.push(flag)
 		}
 
-		let status = execute(
-			&self.ui,
+		let status = self.execute(
 			linker
 				.args(&linker_args)
 				.current_dir(&parent_workspace.working_directory),
@@ -271,6 +268,26 @@ impl TargetTrait for GenericTarget
 		self.copy_assets(&out_dir)?;
 
 		Ok(())
+	}
+
+	fn execute(
+		&self,
+		cmd: &mut Command,
+	) -> anyhow::Result<ExitStatus>
+	{
+		let output = cmd.output()?;
+		let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+		if !self.ui.quiet && !stderr.is_empty() {
+			self.ui.progress_manager.println(
+				if output.status.success() {
+					self.ui.format_warn(stderr)
+				} else {
+					self.ui.format_err(stderr)
+				},
+			)?;
+		}
+
+		Ok(output.status)
 	}
 }
 

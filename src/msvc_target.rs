@@ -6,6 +6,7 @@ use std::{
 	path::PathBuf,
 	process::{
 		Command,
+		ExitStatus,
 		Stdio,
 	},
 };
@@ -31,7 +32,6 @@ use crate::{
 	ui::NumakeUI,
 	util::{
 		download_vswhere,
-		execute,
 		to_lua_result,
 	},
 };
@@ -344,8 +344,7 @@ impl TargetTrait for MSVCTarget
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			let status = execute(
-				&self.ui,
+			let status = self.execute(
 				compiler
 					.envs(&msvc_env)
 					.args(&compiler_args)
@@ -394,8 +393,7 @@ impl TargetTrait for MSVCTarget
 			res_compiler_args
 				.push(resource_file.to_str().unwrap_or("ERROR").to_string());
 
-			let status = execute(
-				&self.ui,
+			let status = self.execute(
 				resource_compiler
 					.envs(&msvc_env)
 					.args(&res_compiler_args)
@@ -437,8 +435,7 @@ impl TargetTrait for MSVCTarget
 
 			cvtres_args.push(res_file.to_str().unwrap_or("ERROR").to_string());
 
-			let status = execute(
-				&self.ui,
+			let status = self.execute(
 				cvtres
 					.envs(&msvc_env)
 					.args(&cvtres_args)
@@ -484,8 +481,7 @@ impl TargetTrait for MSVCTarget
 
 		linker_args.append(&mut self.libs.clone());
 
-		let status = execute(
-			&self.ui,
+		let status = self.execute(
 			linker
 				.args(&linker_args)
 				.envs(&msvc_env)
@@ -501,6 +497,26 @@ impl TargetTrait for MSVCTarget
 		self.copy_assets(&out_dir)?;
 
 		Ok(())
+	}
+
+	fn execute(
+		&self,
+		cmd: &mut Command,
+	) -> anyhow::Result<ExitStatus>
+	{
+		let output = cmd.output()?;
+		let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+		if !self.ui.quiet && !stdout.is_empty() {
+			self.ui.progress_manager.println(
+				if output.status.success() {
+					self.ui.format_warn(stdout)
+				} else {
+					self.ui.format_err(stdout)
+				},
+			)?;
+		}
+
+		Ok(output.status)
 	}
 }
 
