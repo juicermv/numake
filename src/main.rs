@@ -5,6 +5,10 @@
 */
 
 use clap::Parser;
+use console::{
+	Emoji,
+	style,
+};
 use mlua::Lua;
 
 use crate::{
@@ -15,24 +19,23 @@ use crate::{
 	lua_workspace::LuaWorkspace,
 };
 
+mod cache;
 mod cli_args;
 mod error;
-mod lua_workspace;
 mod generic_target;
-mod util;
-mod cache;
-mod target;
+mod lua_workspace;
 mod msvc_target;
+mod target;
 mod ui;
+mod util;
 
-#[cfg(not(test))]
-fn main() -> anyhow::Result<()>
+fn run() -> anyhow::Result<()>
 {
 	let cli = Cli::parse();
 	let lua = Lua::new();
 	lua.enable_jit(true);
 	lua.sandbox(true)?;
-	
+
 	match &cli.command {
 		SubCommands::Build(args) => {
 			let mut proj = LuaWorkspace::new(args)?;
@@ -55,6 +58,24 @@ fn main() -> anyhow::Result<()>
 	}
 
 	Ok(())
+}
+
+#[cfg(not(test))]
+fn main()
+{
+	let result = run();
+	if result.is_err() {
+		println!(
+			"{}",
+			style(format!(
+				"{} {}",
+				Emoji("⛔", "ERROR!"),
+				result.err().unwrap()
+			))
+				.red()
+				.bold()
+		)
+	}
 }
 
 #[cfg(test)]
