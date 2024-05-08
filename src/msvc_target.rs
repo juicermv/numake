@@ -261,6 +261,7 @@ impl TargetTrait for MSVCTarget
 	fn build(
 		&self,
 		_: &mut LuaWorkspace,
+		_: &ProgressBar,
 	) -> anyhow::Result<()>
 	{
 		Err(anyhow!(&NUMAKE_ERROR.MSVC_WINDOWS_ONLY))
