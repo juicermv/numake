@@ -5,5 +5,5 @@ fn main()
 		std::env::var("TARGET").unwrap()
 	);
 
-	println!("cargo:rustc-env=RUST_BACKTRACE=1");
+	println!("cargo:rustc-env=RUST_BACKTRACE=full");
 }
