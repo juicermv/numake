@@ -11,7 +11,15 @@ use std::{
 };
 
 use anyhow::anyhow;
-use mlua::{FromLua, Lua, Table, UserData, UserDataFields, Value};
+use indicatif::ProgressBar;
+use mlua::{
+	FromLua,
+	Lua,
+	Table,
+	UserData,
+	UserDataFields,
+	Value,
+};
 use pathdiff::diff_paths;
 use serde::Serialize;
 use tempfile::tempdir;
@@ -19,13 +27,14 @@ use tempfile::tempdir;
 use crate::{
 	error::NUMAKE_ERROR,
 	lua_workspace::LuaWorkspace,
+	target::TargetTrait,
+	ui::NumakeUI,
 	util::{
 		download_vswhere,
-		log,
+		execute,
 		to_lua_result,
 	},
 };
-use crate::target::TargetTrait;
 
 #[derive(Clone, Serialize)]
 pub struct MSVCTarget
@@ -47,7 +56,7 @@ pub struct MSVCTarget
 	workdir: PathBuf,
 
 	#[serde(skip_serializing)]
-	quiet: bool,
+	ui: NumakeUI,
 
 	pub resources: Vec<PathBuf>,
 	pub def_files: Vec<PathBuf>,
@@ -62,7 +71,7 @@ impl MSVCTarget
 		name: String,
 		output: Option<String>,
 		workdir: PathBuf,
-		quiet: bool,
+		ui: NumakeUI,
 	) -> anyhow::Result<Self>
 	{
 		Ok(MSVCTarget {
@@ -77,7 +86,7 @@ impl MSVCTarget
 			assets: HashMap::new(),
 			workdir,
 			arch: None,
-			quiet,
+			ui,
 			resources: Vec::new(),
 			def_files: Vec::new(),
 			rc_flags: Vec::new(),
@@ -209,14 +218,14 @@ impl MSVCTarget
 
 			Command::new("cmd")
 				.stdout(
-					if self.quiet {
+					if self.ui.quiet {
 						Stdio::null()
 					} else {
 						Stdio::inherit()
 					},
 				)
 				.stderr(
-					if self.quiet {
+					if self.ui.quiet {
 						Stdio::null()
 					} else {
 						Stdio::inherit()
@@ -246,7 +255,8 @@ impl MSVCTarget
 	}
 }
 
-impl TargetTrait for MSVCTarget {
+impl TargetTrait for MSVCTarget
+{
 	#[cfg(not(windows))]
 	fn build(
 		&self,
@@ -260,6 +270,7 @@ impl TargetTrait for MSVCTarget {
 	fn build(
 		&self,
 		parent_workspace: &mut LuaWorkspace,
+		progress: &ProgressBar,
 	) -> anyhow::Result<()>
 	{
 		let obj_dir: PathBuf = parent_workspace
@@ -273,12 +284,8 @@ impl TargetTrait for MSVCTarget {
 			.workspace
 			.join(format!("res/{}", &self.name));
 
-		let msvc_env = self.setup_msvc(
-			parent_workspace,
-			self.arch.clone(),
-			None,
-			None,
-		)?; // TODO Un-None these
+		let msvc_env =
+			self.setup_msvc(parent_workspace, self.arch.clone(), None, None)?; // TODO Un-None these
 
 		if !obj_dir.exists() {
 			fs::create_dir_all(&obj_dir)?;
@@ -336,30 +343,21 @@ impl TargetTrait for MSVCTarget {
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			let status = compiler
-				.stdout(
-					if self.quiet {
-						Stdio::null()
-					} else {
-						Stdio::inherit()
-					},
-				)
-				.stderr(
-					if self.quiet {
-						Stdio::null()
-					} else {
-						Stdio::inherit()
-					},
-				)
-				.envs(&msvc_env)
-				.args(&compiler_args)
-				.current_dir(&parent_workspace.working_directory)
-				.status()?;
+			let status = execute(
+				&self.ui,
+				compiler
+					.envs(&msvc_env)
+					.args(&compiler_args)
+					.current_dir(&parent_workspace.working_directory),
+			)?;
 
-			log(&format!("\ncl exited with {}.\n", status), self.quiet);
+			progress.println(
+				self.ui.format_info(format!("cl exited with {}.", status)),
+			);
 
 			if !status.success() {
-				log("Aborting...", self.quiet);
+				self.ui.print_err("Aborting...".to_string())?;
+				progress.finish_and_clear();
 				Err(anyhow!(status))?
 			}
 		}
@@ -395,30 +393,21 @@ impl TargetTrait for MSVCTarget {
 			res_compiler_args
 				.push(resource_file.to_str().unwrap_or("ERROR").to_string());
 
-			let status = resource_compiler
-				.stdout(
-					if self.quiet {
-						Stdio::null()
-					} else {
-						Stdio::inherit()
-					},
-				)
-				.stderr(
-					if self.quiet {
-						Stdio::null()
-					} else {
-						Stdio::inherit()
-					},
-				)
-				.envs(&msvc_env)
-				.args(&res_compiler_args)
-				.current_dir(&parent_workspace.working_directory)
-				.status()?;
+			let status = execute(
+				&self.ui,
+				resource_compiler
+					.envs(&msvc_env)
+					.args(&res_compiler_args)
+					.current_dir(&parent_workspace.working_directory),
+			)?;
 
-			log(&format!("\nrc exited with {}.\n", status), self.quiet);
+			progress.println(
+				self.ui.format_info(format!("rc exited with {}.", status)),
+			);
 
 			if !status.success() {
-				log("Aborting...", self.quiet);
+				self.ui.print_err("Aborting...".to_string())?;
+				progress.finish_and_clear();
 				Err(anyhow!(status))?
 			}
 
@@ -447,30 +436,22 @@ impl TargetTrait for MSVCTarget {
 
 			cvtres_args.push(res_file.to_str().unwrap_or("ERROR").to_string());
 
-			let status = cvtres
-				.stdout(
-					if self.quiet {
-						Stdio::null()
-					} else {
-						Stdio::inherit()
-					},
-				)
-				.stderr(
-					if self.quiet {
-						Stdio::null()
-					} else {
-						Stdio::inherit()
-					},
-				)
-				.envs(&msvc_env)
-				.args(&cvtres_args)
-				.current_dir(&parent_workspace.working_directory)
-				.status()?;
+			let status = execute(
+				&self.ui,
+				cvtres
+					.envs(&msvc_env)
+					.args(&cvtres_args)
+					.current_dir(&parent_workspace.working_directory),
+			)?;
 
-			log(&format!("\ncvtres exited with {}.\n", status), self.quiet);
+			progress.println(
+				self.ui
+					.format_info(format!("cvtres exited with {}.", status)),
+			);
 
 			if !status.success() {
-				log("Aborting...", self.quiet);
+				self.ui.print_err("Aborting...".to_string())?;
+				progress.finish_and_clear();
 				Err(anyhow!(status))?
 			}
 		}
@@ -502,32 +483,19 @@ impl TargetTrait for MSVCTarget {
 
 		linker_args.append(&mut self.libs.clone());
 
-		log(
-			&format!(
-				"\n{} exited with {}. \n",
-				if self.static_lib { "lib" } else { "link" },
-				linker
-					.stdout(
-						if self.quiet {
-							Stdio::null()
-						} else {
-							Stdio::inherit()
-						},
-					)
-					.stderr(
-						if self.quiet {
-							Stdio::null()
-						} else {
-							Stdio::inherit()
-						},
-					)
-					.args(&linker_args)
-					.envs(&msvc_env)
-					.current_dir(&parent_workspace.working_directory)
-					.status()?
-			),
-			self.quiet,
-		);
+		let status = execute(
+			&self.ui,
+			linker
+				.args(&linker_args)
+				.envs(&msvc_env)
+				.current_dir(&parent_workspace.working_directory),
+		)?;
+
+		progress.println(self.ui.format_info(format!(
+			"{} exited with {}.",
+			if self.static_lib { "lib" } else { "link" },
+			status
+		)));
 
 		self.copy_assets(&out_dir)?;
 
@@ -638,9 +606,8 @@ impl UserData for MSVCTarget
 		}
 
 		{
-			fields.add_field_method_get("arch", |_, this| {
-				Ok(this.arch.clone())
-			});
+			fields
+				.add_field_method_get("arch", |_, this| Ok(this.arch.clone()));
 
 			fields.add_field_method_set("arch", |_, this, val: String| {
 				this.arch = Some(val);

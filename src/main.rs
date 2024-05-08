@@ -10,7 +10,7 @@ use mlua::Lua;
 use crate::{
 	cli_args::{
 		Cli,
-		Subcommands,
+		SubCommands,
 	},
 	lua_workspace::LuaWorkspace,
 };
@@ -23,6 +23,7 @@ mod util;
 mod cache;
 mod target;
 mod msvc_target;
+mod ui;
 
 #[cfg(not(test))]
 fn main() -> anyhow::Result<()>
@@ -33,19 +34,20 @@ fn main() -> anyhow::Result<()>
 	lua.sandbox(true)?;
 	
 	match &cli.command {
-		Subcommands::Build(args) => {
+		SubCommands::Build(args) => {
 			let mut proj = LuaWorkspace::new(args)?;
 			proj.process(&lua)?;
 			proj.build()?;
 		}
 
-		Subcommands::Inspect(args) => {
+		SubCommands::Inspect(args) => {
 			let mut proj = LuaWorkspace::new_inspect(args)?;
 			proj.process(&lua)?;
 
 			println!("{}", serde_json::to_string_pretty(&proj)?);
 		}
-		Subcommands::List(args) => {
+
+		SubCommands::List(args) => {
 			let mut proj = LuaWorkspace::new_dummy(args)?;
 			proj.process(&lua)?;
 			println!("\nAvailable targets: {}", proj.list_targets()?);

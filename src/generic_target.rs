@@ -1,16 +1,13 @@
 use std::{
 	collections::HashMap,
 	fs
-
 	,
 	path::PathBuf,
-	process::{
-		Command,
-		Stdio,
-	},
+	process::Command,
 };
 
 use anyhow::anyhow;
+use indicatif::ProgressBar;
 use mlua::{
 	FromLua,
 	Lua,
@@ -25,12 +22,13 @@ use serde::Serialize;
 use crate::{
 	error::NUMAKE_ERROR,
 	lua_workspace::LuaWorkspace,
+	target::TargetTrait,
+	ui::NumakeUI,
 	util::{
-		log,
+		execute,
 		to_lua_result,
 	},
 };
-use crate::target::TargetTrait;
 
 #[derive(Clone, Serialize)]
 pub struct GenericTarget
@@ -55,7 +53,7 @@ pub struct GenericTarget
 	workdir: PathBuf,
 
 	#[serde(skip_serializing)]
-	quiet: bool,
+	ui: NumakeUI,
 }
 
 impl GenericTarget
@@ -66,7 +64,7 @@ impl GenericTarget
 		toolset_linker: Option<String>,
 		output: Option<String>,
 		workdir: PathBuf,
-		quiet: bool,
+		ui: NumakeUI,
 	) -> anyhow::Result<Self>
 	{
 		Ok(GenericTarget {
@@ -82,7 +80,7 @@ impl GenericTarget
 			defines: Vec::new(),
 			assets: HashMap::new(),
 			workdir,
-			quiet,
+			ui,
 			name,
 		})
 	}
@@ -122,10 +120,12 @@ impl GenericTarget
 	}
 }
 
-impl TargetTrait for GenericTarget {
+impl TargetTrait for GenericTarget
+{
 	fn build(
 		&self,
 		parent_workspace: &mut LuaWorkspace,
+		progress: &ProgressBar,
 	) -> anyhow::Result<()>
 	{
 		let obj_dir: PathBuf = parent_workspace
@@ -211,36 +211,22 @@ impl TargetTrait for GenericTarget {
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			let status = compiler
-				.stdout(
-					if self.quiet {
-						Stdio::null()
-					} else {
-						Stdio::inherit()
-					},
-				)
-				.stderr(
-					if self.quiet {
-						Stdio::null()
-					} else {
-						Stdio::inherit()
-					},
-				)
-				.args(&compiler_args)
-				.current_dir(&parent_workspace.working_directory)
-				.status()?;
+			let status = execute(
+				&self.ui,
+				compiler
+					.args(&compiler_args)
+					.current_dir(&parent_workspace.working_directory),
+			)?;
 
-			log(
-				&format!(
-					"\n{} exited with {}.\n",
-					toolset_compiler.clone().unwrap_or("NULL".to_string()),
-					status
-				),
-				self.quiet,
-			);
+			progress.println(self.ui.format_info(format!(
+				"{} exited with {}.",
+				toolset_compiler.clone().unwrap_or("NULL".to_string()),
+				status
+			)));
 
 			if !status.success() {
-				log("Aborting...", self.quiet);
+				self.ui.print_err("Aborting...".to_string())?;
+				progress.finish_and_clear();
 				Err(anyhow!(status))?
 			}
 		}
@@ -269,38 +255,24 @@ impl TargetTrait for GenericTarget {
 			linker_args.push(flag)
 		}
 
-		log(
-			&format!(
-				"\n{} exited with {}. \n",
-				toolset_linker.clone().unwrap_or("NULL".to_string()),
-				linker
-					.stdout(
-						if self.quiet {
-							Stdio::null()
-						} else {
-							Stdio::inherit()
-						},
-					)
-					.stderr(
-						if self.quiet {
-							Stdio::null()
-						} else {
-							Stdio::inherit()
-						},
-					)
-					.args(&linker_args)
-					.current_dir(&parent_workspace.working_directory)
-					.status()?
-			),
-			self.quiet,
-		);
+		let status = execute(
+			&self.ui,
+			linker
+				.args(&linker_args)
+				.current_dir(&parent_workspace.working_directory),
+		)?;
+
+		progress.println(self.ui.format_info(format!(
+			"{} exited with {}.",
+			toolset_linker.clone().unwrap_or("NULL".to_string()),
+			status
+		)));
 
 		self.copy_assets(&out_dir)?;
 
 		Ok(())
 	}
 }
-
 
 impl UserData for GenericTarget
 {

@@ -5,8 +5,7 @@ sdl_path_msvc = workspace:download_zip("https:/github.com/libsdl-org/SDL/release
 --- You can use the cache system to save user-specific preferences and things of the sort.
 --- You can store almost every lua variable type but for this example we'll use a string:
 if workspace:get("ice_cream") == nil then
-    print("What is your favorite ice cream flavor?")
-    ice_cream = workspace:query() --- Use workspace:query to read a line from stdin
+    ice_cream = workspace.arguments["ice_cream"] --- Read user-specificed arguments
     workspace:set("ice_cream", ice_cream)
 else
     print("I know your favorite ice cream flavor! It's " .. workspace:get("ice_cream") .. "!")

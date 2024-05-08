@@ -3,17 +3,28 @@ use std::{
 	fs,
 	io::{
 		Cursor,
-		stdin,
+		Read,
 	},
-	path::PathBuf,
+	ops::Deref,
+	path::PathBuf
+	,
 	time::SystemTime,
 };
 
 use anyhow::anyhow;
-use mlua::{Compiler, FromLua, Lua, prelude::{
-	LuaError,
-	LuaValue,
-}, UserData, UserDataFields, UserDataMethods, Value};
+use mlua::{
+	Compiler,
+	FromLua,
+	Lua,
+	prelude::{
+		LuaError,
+		LuaValue,
+	},
+	UserData,
+	UserDataFields,
+	UserDataMethods,
+	Value,
+};
 use serde::Serialize;
 use zip::ZipArchive;
 
@@ -26,15 +37,19 @@ use crate::{
 	},
 	error::NUMAKE_ERROR,
 	generic_target::GenericTarget,
+	msvc_target::MSVCTarget,
+	target::{
+		Target,
+		TargetTrait,
+	},
+	ui::NumakeUI,
 	util::{
 		into_lua_value,
 		into_toml_value,
-		log,
 		to_lua_result,
 	},
 };
-use crate::msvc_target::MSVCTarget;
-use crate::target::{Target, TargetTrait};
+use crate::util::args_to_map;
 
 #[derive(Clone, Serialize)]
 pub struct LuaWorkspace
@@ -55,7 +70,8 @@ pub struct LuaWorkspace
 	arguments: Vec<String>,
 
 	#[serde(skip_serializing)]
-	quiet: bool,
+	ui: NumakeUI,
+
 	#[serde(skip_serializing)]
 	target: String,
 }
@@ -64,8 +80,10 @@ impl UserData for LuaWorkspace
 {
 	fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F)
 	{
-		fields.add_field_method_get("arguments", |_, this| {
-			Ok(this.arguments.clone())
+		fields.add_field_method_get("arguments", |lua, this| {
+			lua.create_table_from(
+				args_to_map(this.arguments.clone())
+			)
 		});
 	}
 
@@ -78,7 +96,7 @@ impl UserData for LuaWorkspace
 				this.toolset_linker.clone(),
 				this.output.clone(),
 				this.working_directory.clone(),
-				this.quiet,
+				this.ui.clone(),
 			))
 		});
 
@@ -87,7 +105,7 @@ impl UserData for LuaWorkspace
 				name,
 				this.output.clone(),
 				this.working_directory.clone(),
-				this.quiet,
+				this.ui.clone(),
 			))
 		});
 
@@ -96,7 +114,7 @@ impl UserData for LuaWorkspace
 		});
 
 		methods.add_method_mut("download_zip", |_, this, url: String| {
-			to_lua_result(this.workspace_download_zip(&url))
+			to_lua_result(this.workspace_download_zip(url))
 		});
 
 		methods.add_method_mut("require_url", |lua, this, url: String| {
@@ -144,11 +162,11 @@ impl UserData for LuaWorkspace
 			},
 		);
 
-		methods.add_method("query", |_, _, ()| {
-			let mut buffer = String::new();
-			stdin().read_line(&mut buffer)?;
-			Ok(buffer)
-		});
+		/*methods.add_method("query", |_, this, prompt: String| {
+			Ok(this.ui.progress_manager.suspend(move || -> String {
+				this.ui.input(this.ui.format_question(prompt))
+			}))
+		});*/
 
 		methods.add_method("env", |_, _, ()| {
 			Ok(std::env::vars().collect::<HashMap<String, String>>())
@@ -179,7 +197,7 @@ impl LuaWorkspace
 			output: args.output.clone(),
 
 			arguments: args.arguments.clone().unwrap_or_default(),
-			quiet: args.quiet,
+			ui: NumakeUI::new(args.quiet),
 			cache: Cache::new(workspace)?,
 		})
 	}
@@ -205,7 +223,7 @@ impl LuaWorkspace
 			output: args.output.clone(),
 
 			arguments: args.arguments.clone().unwrap_or_default(),
-			quiet: args.quiet,
+			ui: NumakeUI::new(args.quiet),
 			cache: Cache::new(workspace)?,
 		})
 	}
@@ -231,7 +249,7 @@ impl LuaWorkspace
 			output: None,
 
 			arguments: vec![],
-			quiet: args.quiet,
+			ui: NumakeUI::new(args.quiet),
 			cache: Cache::new(workspace)?,
 		})
 	}
@@ -260,6 +278,20 @@ impl LuaWorkspace
 
 		lua_state.globals().set("workspace", self.clone())?;
 
+		// Custom print function
+		lua_state.globals().set(
+			"print",
+			lua_state.create_function_mut(|lua, out: LuaValue| {
+				let workspace =
+					lua.globals().get::<&str, LuaWorkspace>("workspace")?;
+				workspace
+					.ui
+					.progress_manager
+					.println(workspace.ui.format_info(out.to_string()?))?;
+				Ok(())
+			})?,
+		)?;
+
 		// Caching
 		let file_size = self.file.metadata()?.len().to_string();
 		let file_size_toml = toml::Value::from(file_size.clone());
@@ -274,20 +306,17 @@ impl LuaWorkspace
 		};
 
 		if file_cache_exists && cached_file_size == file_size_toml {
-			log("Loading and executing script from cache...", self.quiet);
 			lua_state
 				.load(self.cache.read_file(file_name)?)
 				.set_name(self.file.file_name().unwrap().to_str().unwrap())
 				.exec()?;
-			log("Success!", self.quiet);
 		} else if cached_file_size != file_size_toml || !file_cache_exists {
 			let file_content = fs::read(&self.file)?;
-			log("Loading and executing script...", self.quiet);
 			lua_state
 				.load(&file_content)
 				.set_name(self.file.file_name().unwrap().to_str().unwrap())
 				.exec()?;
-			log("Success! Saving script to cache...", self.quiet);
+
 			self.cache.write_file(
 				file_name,
 				Compiler::new()
@@ -298,25 +327,22 @@ impl LuaWorkspace
 			)?;
 
 			self.cache.set_value(file_name, file_size_toml.clone())?;
-			log("Done.", self.quiet);
 		}
 
 		// Read back workspace values from Lua
 		let lua_workspace: LuaWorkspace =
 			lua_state.globals().get("workspace")?;
 		self.targets = lua_workspace.targets.clone();
+		self.ui.progress_manager = lua_workspace.ui.progress_manager;
 		self.cache.user_values = lua_workspace.cache.user_values;
 
 		// Write cache to disk
 		self.cache.flush()?;
 
-		log(
-			&format!(
-				"Processing script done in {}ms!",
-				now.elapsed()?.as_millis()
-			),
-			self.quiet,
-		);
+		self.ui.print_ok(format!(
+			"Processing script done in {}ms!",
+			now.elapsed()?.as_millis()
+		))?;
 
 		Ok(())
 	}
@@ -341,14 +367,19 @@ impl LuaWorkspace
 
 	pub fn build(&mut self) -> anyhow::Result<()>
 	{
+		let mut result = Ok(());
+		self.ui.stdout.hide_cursor()?;
+		self.ui.stderr.hide_cursor()?;
 		if self.target == "all" || self.target == "*" {
-			for (target, _) in self.targets.clone() {
-				self.build_target(&target)?;
+			for (target, _) in self.targets.clone().iter() {
+				self.build_target(target)?;
 			}
-			Ok(())
 		} else {
-			self.build_target(&self.target.clone())
+			result = self.build_target(&self.target.clone());
 		}
+		self.ui.stdout.show_cursor()?;
+		self.ui.stderr.show_cursor()?;
+		result
 	}
 
 	fn build_target(
@@ -359,21 +390,19 @@ impl LuaWorkspace
 		if !self.targets.contains_key(_target) {
 			Err(anyhow!(&NUMAKE_ERROR.TARGET_NOT_FOUND))
 		} else {
-			log(&format!("Selecting target {}...", _target), self.quiet);
-			log(&format!("Building target {}...", _target), self.quiet);
+			let spinner =
+				self.ui.spinner(format!("Building target {}...", _target));
 			let now = SystemTime::now();
 			self.targets
 				.get(_target)
 				.unwrap()
-				.build(&mut self.clone())?;
-			log(
-				&format!(
-					"Building target {} done in {}ms!",
-					_target,
-					now.elapsed()?.as_millis()
-				),
-				self.quiet,
-			);
+				.build(&mut self.clone(), &spinner)?;
+			spinner.finish_with_message(self.ui.format_ok(format!(
+				"Building target {} done in {}ms!",
+				_target,
+				now.elapsed()?.as_millis()
+			)));
+
 			Ok(())
 		}
 	}
@@ -425,32 +454,38 @@ impl LuaWorkspace
 
 	fn workspace_download_zip(
 		&mut self,
-		url: &String,
+		url: String,
 	) -> anyhow::Result<String>
 	{
-		log("Starting zip download...", self.quiet);
-
-		if self.cache.check_dir_exists(url) {
-			log(
-				&format!("Cache entry for [{}] found. \nNot downloading. This is okay!", url),
-				self.quiet,
-			);
-			Ok(self.cache.get_dir(url)?.to_str().unwrap().to_string())
+		if self.cache.check_dir_exists(&url) {
+			self.ui
+				.progress_manager
+				.println(self.ui.format_warn(format!(
+					"Cache entry for [{}] found. \nNot downloading. This is okay!",
+					url
+				)))?;
+			Ok(self.cache.get_dir(&url)?.to_str().unwrap().to_string())
 		} else {
-			let response = reqwest::blocking::get(url)?;
+			let response = reqwest::blocking::get(&url)?;
 			if response.status().is_success() {
-				log(
-					&format!(
-						"Server responded with {}!",
-						response.status().to_string()
+				let spinner = self
+					.ui
+					.spinner("Downloading & extracting archive...".to_string());
+				self.ui.progress_manager.println(self.ui.format_ok(
+					format!(
+						"Server responded with {}! [{}]",
+						response.status(),
+						&url
 					),
-					self.quiet,
-				);
-				let path = self.cache.get_dir(url)?;
-				log("Downloading & extracting archive...", self.quiet);
+				))?;
+				let path = self.cache.get_dir(&url)?;
+
 				ZipArchive::new(Cursor::new(response.bytes()?))?
 					.extract(&path)?;
-				log("Done!", self.quiet);
+				spinner.finish_with_message(
+					self.ui.format_ok(format!("Done extracting! [{}]", url)),
+				);
+
 				Ok(path.to_str().unwrap().to_string())
 			} else {
 				Err(anyhow!(response.status()))?

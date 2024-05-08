@@ -1,6 +1,11 @@
 use std::{
+	collections::HashMap,
 	fs,
 	path::Path,
+	process::{
+		Command,
+		ExitStatus,
+	},
 };
 
 use anyhow::anyhow;
@@ -11,15 +16,7 @@ use mlua::{
 };
 use sha256::digest;
 
-pub fn log(
-	what: &str,
-	quiet: bool,
-)
-{
-	if !quiet {
-		println!("{}", what);
-	}
-}
+use crate::ui::NumakeUI;
 
 pub fn hash_string(val: &String) -> String { digest(val).to_string() }
 
@@ -120,4 +117,53 @@ pub fn download_vswhere<P: AsRef<Path>>(path: &P) -> anyhow::Result<()>
 	} else {
 		Err(anyhow!(response.status()))
 	}
+}
+
+pub fn execute(
+	ui: &NumakeUI,
+	cmd: &mut Command,
+) -> anyhow::Result<ExitStatus>
+{
+	let output = cmd.output()?;
+	let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+	if !ui.quiet && !stdout.is_empty() {
+		ui.progress_manager.println(ui.format_warn(stdout))?;
+	}
+
+	Ok(output.status)
+}
+
+pub fn args_to_map(args: Vec<String>) -> HashMap<String, Option<String>>
+{
+	let mut output: HashMap<String, Option<String>> = HashMap::new();
+
+	for arg in args {
+		let split_arg = arg
+			.split("=")
+			.map(|val| val.to_string())
+			.collect::<Vec<String>>();
+
+		if split_arg.len() == 2 {
+			output.insert(
+				split_arg[0].clone(),
+				Some(
+					split_arg[1].clone()
+				),
+			);
+		} else if split_arg.len() > 1 {
+			output.insert(
+				split_arg[0].clone(),
+				Some(
+					split_arg[1..]
+						.iter()
+						.map(|val| val.clone() + "=")
+						.collect::<String>(),
+				),
+			);
+		} else {
+			output.insert(split_arg[0].clone(), None);
+		}
+	}
+
+	output
 }

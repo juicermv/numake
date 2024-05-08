@@ -1,3 +1,4 @@
+use indicatif::ProgressBar;
 use mlua::{FromLua, IntoLua, Lua, Value};
 use serde::Serialize;
 
@@ -12,6 +13,7 @@ pub trait TargetTrait
 	fn build(
 		&self,
 		parent_workspace: &mut LuaWorkspace,
+		progress: &ProgressBar
 	) -> anyhow::Result<()>;
 }
 
@@ -37,13 +39,13 @@ impl Target {
 }
 
 impl TargetTrait for Target {
-	fn build(&self, parent_workspace: &mut LuaWorkspace) -> anyhow::Result<()> {
+	fn build(&self, parent_workspace: &mut LuaWorkspace, progress: &ProgressBar) -> anyhow::Result<()> {
 		match self {
 			Target::Generic(target) => {
-				target.build(parent_workspace)
+				target.build(parent_workspace, progress)
 			}
 			Target::MSVC(target) => {
-				target.build(parent_workspace)
+				target.build(parent_workspace, progress)
 			}
 		}
 	}
