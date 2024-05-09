@@ -78,16 +78,12 @@ jobs:
         run: cargo test mingw_build --verbose -- --nocapture
 
   build-release-x86_64-pc-windows-gnu:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: test-x86_64-pc-windows-gnu
     
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install MinGW
-        run: |
-          sudo apt-get install mingw-w64
-
       - name: Install toolchain
         run: rustup target add x86_64-pc-windows-gnu
     
@@ -105,15 +101,11 @@ jobs:
 
 
   build-debug-x86_64-pc-windows-gnu:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: test-x86_64-pc-windows-gnu
     
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install MinGW
-        run: |
-          sudo apt-get install mingw-w64
 
       - name: Install toolchain
         run: rustup target add x86_64-pc-windows-gnu
