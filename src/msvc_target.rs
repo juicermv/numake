@@ -6,8 +6,8 @@ use std::{
 	path::PathBuf,
 	process::{
 		Command,
-		ExitStatus,
-		Stdio,
+		ExitStatus
+		,
 	},
 };
 
@@ -216,23 +216,12 @@ impl MSVCTarget
 			writeln!(&bat_file, "set > {}", env_path.to_str().unwrap())?;
 			bat_file.flush()?;
 
-			Command::new("cmd")
-				.stdout(
-					if self.ui.quiet {
-						Stdio::null()
-					} else {
-						Stdio::inherit()
-					},
-				)
-				.stderr(
-					if self.ui.quiet {
-						Stdio::null()
-					} else {
-						Stdio::inherit()
-					},
-				)
-				.args(["/C", "@call", bat_path.to_str().unwrap()])
-				.status()?;
+			self.execute(Command::new("cmd").args([
+				"/C",
+				"@call",
+				bat_path.to_str().unwrap(),
+			]))?;
+			
 			let env: String = fs::read_to_string(env_path)?;
 
 			dir.close()?;
