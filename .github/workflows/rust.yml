@@ -73,10 +73,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install MinGW
-        run: |
-          sudo apt-get install mingw-w64
       
       - name: Run tests
         run: cargo test mingw_build --verbose -- --nocapture
