@@ -116,7 +116,7 @@ jobs:
 
   # Experimental
   build-debug-x86_64-pc-windows-msvc:
-    runs-on: self-hosted
+    runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
