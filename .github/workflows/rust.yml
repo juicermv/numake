@@ -74,8 +74,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install MinGW
+        run: sudo apt-get install mingw-w64
+      
       - name: Run tests
-        run: cargo test gnu_build --verbose -- --nocapture
+        run: cargo test mingw_build --verbose -- --nocapture
 
   build-release-x86_64-pc-windows-gnu:
     runs-on: self-hosted
@@ -83,6 +86,9 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Install MinGW
+        run: sudo apt-get install mingw-w64
 
       - name: Install toolchain
         run: rustup target add x86_64-pc-windows-gnu
@@ -106,6 +112,9 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install MinGW
+        run: sudo apt-get install mingw-w64
 
       - name: Install toolchain
         run: rustup target add x86_64-pc-windows-gnu
