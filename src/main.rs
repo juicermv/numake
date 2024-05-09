@@ -137,6 +137,7 @@ mod tests
 		Ok(())
 	}
 
+	// Does not at the moment work on GH actions for some unknown reason
 	#[test]
 	fn msvc_build() -> anyhow::Result<()>
 	{

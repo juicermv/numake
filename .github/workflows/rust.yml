@@ -68,46 +68,62 @@ jobs:
 
 
 
-  test-x86_64-pc-windows-msvc:
+  test-x86_64-pc-windows-gnu:
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Run tests
-        run: cargo test msvc_build --verbose -- --nocapture
+        run: cargo test gnu_build --verbose -- --nocapture
 
-  build-release-x86_64-pc-windows-msvc:
+  build-release-x86_64-pc-windows-gnu:
     runs-on: self-hosted
-    needs: test-x86_64-pc-windows-msvc
+    needs: test-x86_64-pc-windows-gnu
     
     steps:
       - uses: actions/checkout@v4
     
       - name: build
-        run: cargo build --verbose --target x86_64-pc-windows-msvc --release
+        run: cargo build --verbose --target x86_64-pc-windows-gnu --release
 
       - name: Update indev release
-        run: gh release upload indev ./target/x86_64-pc-windows-msvc/release/numake.exe --clobber
+        run: gh release upload indev ./target/x86_64-pc-windows-gnu/release/numake.exe --clobber
         
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: 'release-x86_64-pc-windows-msvc'
-          path: 'target/x86_64-pc-windows-msvc/release/numake.exe'
+          name: 'release-x86_64-pc-windows-gnu'
+          path: 'target/x86_64-pc-windows-gnu/release/numake.exe'
 
 
-
-  build-debug-x86_64-pc-windows-msvc:
+  build-debug-x86_64-pc-windows-gnu:
     runs-on: self-hosted
-    needs: test-x86_64-pc-windows-msvc
+    needs: test-x86_64-pc-windows-gnu
     
     steps:
       - uses: actions/checkout@v4
     
       - name: build
-        run: cargo build --verbose --target x86_64-pc-windows-msvc
+        run: cargo build --verbose --target x86_64-pc-windows-gnu
         
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'debug-x86_64-pc-windows-gnu'
+          path: 'target/x86_64-pc-windows-gnu/debug'
+
+
+  # Experimental
+  build-debug-x86_64-pc-windows-msvc:
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: build
+        run: cargo build --verbose --target x86_64-pc-windows-msvc
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
