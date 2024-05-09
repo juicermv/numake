@@ -157,8 +157,11 @@ mod tests
 
 		let mut test_exec = std::process::Command::new(
 			"examples/test/.numake/out/msvc/test.exe",
-		);
-		assert_eq!(test_exec.status()?.code(), Some(0));
+		).output()?;
+		println!("{}", String::from_utf8_lossy(test_exec.stdout.as_slice()));
+		println!("{}", String::from_utf8_lossy(test_exec.stderr.as_slice()));
+
+		assert_eq!(test_exec.status.code(), Some(0));
 		Ok(())
 	}
 }

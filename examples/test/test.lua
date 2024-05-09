@@ -55,6 +55,7 @@ msvc.library_paths = {
     sdl_path_msvc .. "/SDL2-2.30.2/lib/x64",
 }
 
+msvc.compiler_flags = { "/EHsc" }
 msvc.linker_flags = { "/SUBSYSTEM:WINDOWS" }
 msvc.output = "test.exe"
 msvc.definitions = { "MSVC" }

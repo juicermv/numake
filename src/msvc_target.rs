@@ -6,8 +6,7 @@ use std::{
 	path::PathBuf,
 	process::{
 		Command,
-		ExitStatus
-		,
+		ExitStatus,
 	},
 };
 
@@ -221,7 +220,7 @@ impl MSVCTarget
 				"@call",
 				bat_path.to_str().unwrap(),
 			]))?;
-			
+
 			let env: String = fs::read_to_string(env_path)?;
 
 			dir.close()?;
@@ -501,6 +500,17 @@ impl TargetTrait for MSVCTarget
 					self.ui.format_warn(stdout)
 				} else {
 					self.ui.format_err(stdout)
+				},
+			)?;
+		}
+
+		let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+		if !self.ui.quiet && !stderr.is_empty() {
+			self.ui.progress_manager.println(
+				if output.status.success() {
+					self.ui.format_info(stderr)
+				} else {
+					self.ui.format_err(stderr)
 				},
 			)?;
 		}
