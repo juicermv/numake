@@ -5,8 +5,7 @@ use std::{
 
 use console::{
 	Emoji,
-	Style
-	,
+	Style,
 };
 use dialoguer::{
 	Input,
@@ -16,6 +15,7 @@ use indicatif::{
 	MultiProgress,
 	ProgressBar,
 	ProgressDrawTarget,
+	ProgressStyle,
 };
 
 #[derive(Clone)]
@@ -48,7 +48,7 @@ impl NumakeUI
 			style_ok: Style::new().green().bold(),
 			style_err: Style::new().red().bold(),
 			style_warn: Style::new().yellow().bold(),
-			style_question: Style::new().cyan().underlined(),
+			style_question: Style::new().cyan(),
 		}
 	}
 
@@ -153,7 +153,11 @@ impl NumakeUI
 		length: u64,
 	) -> ProgressBar
 	{
-		self.progress_manager.add(ProgressBar::new(length))
+		let bar = ProgressBar::new(length);
+		if self.quiet {
+			bar.set_draw_target(ProgressDrawTarget::hidden());
+		}
+		self.progress_manager.add(bar)
 	}
 
 	pub fn spinner(
@@ -163,7 +167,17 @@ impl NumakeUI
 	{
 		let spinner = ProgressBar::new_spinner();
 		spinner.set_message(msg);
-		spinner.enable_steady_tick(Duration::from_millis(100));
+		spinner.enable_steady_tick(Duration::from_millis(115));
+		spinner.set_style(ProgressStyle::default_spinner().tick_strings(&[
+			&self.style_question.apply_to("/").to_string(),
+			&self.style_question.apply_to("—").to_string(),
+			&self.style_question.apply_to("\\").to_string(),
+			&self.style_question.apply_to("|").to_string(),
+			"-",
+		]));
+		if self.quiet {
+			spinner.set_draw_target(ProgressDrawTarget::hidden());
+		}
 		self.progress_manager.add(spinner)
 	}
 
