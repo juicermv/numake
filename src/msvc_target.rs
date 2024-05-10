@@ -11,7 +11,15 @@ use std::{
 };
 
 use anyhow::anyhow;
-use indicatif::ProgressBar;
+use console::{
+	Alignment,
+	pad_str_with,
+	Term,
+};
+use indicatif::{
+	ProgressBar,
+	TermLike,
+};
 use mlua::{
 	FromLua,
 	Lua,
@@ -178,7 +186,7 @@ impl MSVCTarget
 			download_vswhere(&vswhere_path)?;
 		}
 
-		let vswhere_output: String = String::from_utf8(
+		let vswhere_output: String = String::from_utf8_lossy(
 			Command::new(vswhere_path)
 				.args([
 					"-latest",
@@ -190,8 +198,10 @@ impl MSVCTarget
 					"JSON",
 				])
 				.output()?
-				.stdout,
-		)?;
+				.stdout
+				.as_slice(),
+		)
+			.to_string();
 
 		let vswhere_json: Vec<String> = serde_json::from_str(&vswhere_output)?;
 
@@ -339,12 +349,15 @@ impl TargetTrait for MSVCTarget
 					.current_dir(&parent_workspace.working_directory),
 			)?;
 
-			progress.println(
-				self.ui.format_info(format!("cl exited with {}.", status)),
-			);
+			progress.println(pad_str_with(
+				&self.ui.format_info(format!("CL exited with {}.", status)),
+				Term::stdout().width() as usize,
+				Alignment::Center,
+				None,
+				' ',
+			));
 
 			if !status.success() {
-				self.ui.print_err("Aborting...".to_string())?;
 				progress.finish_and_clear();
 				Err(anyhow!(status))?
 			}
@@ -388,12 +401,15 @@ impl TargetTrait for MSVCTarget
 					.current_dir(&parent_workspace.working_directory),
 			)?;
 
-			progress.println(
-				self.ui.format_info(format!("rc exited with {}.", status)),
-			);
+			progress.println(pad_str_with(
+				&self.ui.format_info(format!("RC exited with {}.", status)),
+				Term::stdout().width() as usize,
+				Alignment::Center,
+				None,
+				' ',
+			));
 
 			if !status.success() {
-				self.ui.print_err("Aborting...".to_string())?;
 				progress.finish_and_clear();
 				Err(anyhow!(status))?
 			}
@@ -430,13 +446,17 @@ impl TargetTrait for MSVCTarget
 					.current_dir(&parent_workspace.working_directory),
 			)?;
 
-			progress.println(
-				self.ui
-					.format_info(format!("cvtres exited with {}.", status)),
-			);
+			progress.println(pad_str_with(
+				&self
+					.ui
+					.format_info(format!("CVTRES exited with {}.", status)),
+				Term::stdout().width() as usize,
+				Alignment::Center,
+				None,
+				' ',
+			));
 
 			if !status.success() {
-				self.ui.print_err("Aborting...".to_string())?;
 				progress.finish_and_clear();
 				Err(anyhow!(status))?
 			}
@@ -476,11 +496,17 @@ impl TargetTrait for MSVCTarget
 				.current_dir(&parent_workspace.working_directory),
 		)?;
 
-		progress.println(self.ui.format_info(format!(
-			"{} exited with {}.",
-			if self.static_lib { "lib" } else { "link" },
-			status
-		)));
+		progress.println(pad_str_with(
+			&self.ui.format_info(format!(
+				"{} exited with {}.",
+				if self.static_lib { "LIB" } else { "LINK" },
+				status
+			)),
+			Term::stdout().width() as usize,
+			Alignment::Center,
+			None,
+			' ',
+		));
 
 		self.copy_assets(&out_dir)?;
 
@@ -494,23 +520,24 @@ impl TargetTrait for MSVCTarget
 	{
 		let output = cmd.output()?;
 		let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-		if !self.ui.quiet && !stdout.is_empty() {
-			self.ui.progress_manager.println(
-				if output.status.success() {
-					self.ui.format_warn(stdout)
-				} else {
-					self.ui.format_err(stdout)
-				},
-			)?;
-		}
 
-		let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+		/*let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 		if !self.ui.quiet && !stderr.is_empty() {
 			self.ui.progress_manager.println(
 				if output.status.success() {
 					self.ui.format_info(stderr)
 				} else {
 					self.ui.format_err(stderr)
+				},
+			)?;
+		}*/
+
+		if !self.ui.quiet && !stdout.is_empty() {
+			self.ui.progress_manager.println(
+				if output.status.success() {
+					self.ui.format_warn(stdout)
+				} else {
+					self.ui.format_err(stdout)
 				},
 			)?;
 		}

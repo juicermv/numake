@@ -1,13 +1,8 @@
 use std::{
 	collections::HashMap,
 	fs,
-	io::{
-		Cursor,
-		Read,
-	},
-	ops::Deref,
-	path::PathBuf
-	,
+	io::Cursor,
+	path::PathBuf,
 	time::SystemTime,
 };
 
@@ -44,12 +39,12 @@ use crate::{
 	},
 	ui::NumakeUI,
 	util::{
+		args_to_map,
 		into_lua_value,
 		into_toml_value,
 		to_lua_result,
 	},
 };
-use crate::util::args_to_map;
 
 #[derive(Clone, Serialize)]
 pub struct LuaWorkspace
@@ -81,9 +76,7 @@ impl UserData for LuaWorkspace
 	fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F)
 	{
 		fields.add_field_method_get("arguments", |lua, this| {
-			lua.create_table_from(
-				args_to_map(this.arguments.clone())
-			)
+			lua.create_table_from(args_to_map(this.arguments.clone()))
 		});
 	}
 
@@ -259,6 +252,7 @@ impl LuaWorkspace
 		lua_state: &Lua,
 	) -> anyhow::Result<()>
 	{
+		let spinner = self.ui.spinner("Processing script...".to_string());
 		let now = SystemTime::now();
 		lua_state.set_compiler(
 			Compiler::new()
@@ -339,10 +333,10 @@ impl LuaWorkspace
 		// Write cache to disk
 		self.cache.flush()?;
 
-		self.ui.print_ok(format!(
+		spinner.finish_with_message(self.ui.format_ok(format!(
 			"Processing script done in {}ms!",
 			now.elapsed()?.as_millis()
-		))?;
+		)));
 
 		Ok(())
 	}
@@ -368,8 +362,6 @@ impl LuaWorkspace
 	pub fn build(&mut self) -> anyhow::Result<()>
 	{
 		let mut result = Ok(());
-		self.ui.stdout.hide_cursor()?;
-		self.ui.stderr.hide_cursor()?;
 		if self.target == "all" || self.target == "*" {
 			for (target, _) in self.targets.clone().iter() {
 				self.build_target(target)?;
@@ -377,8 +369,6 @@ impl LuaWorkspace
 		} else {
 			result = self.build_target(&self.target.clone());
 		}
-		self.ui.stdout.show_cursor()?;
-		self.ui.stderr.show_cursor()?;
 		result
 	}
 
@@ -393,15 +383,23 @@ impl LuaWorkspace
 			let spinner =
 				self.ui.spinner(format!("Building target {}...", _target));
 			let now = SystemTime::now();
-			self.targets
+			let result = self.targets
 				.get(_target)
 				.unwrap()
-				.build(&mut self.clone(), &spinner)?;
-			spinner.finish_with_message(self.ui.format_ok(format!(
-				"Building target {} done in {}ms!",
-				_target,
-				now.elapsed()?.as_millis()
-			)));
+				.build(&mut self.clone(), &spinner);
+			if result.is_ok() {
+				spinner.finish_with_message(self.ui.format_ok(format!(
+					"Building target {} done in {}ms!",
+					_target,
+					now.elapsed()?.as_millis()
+				)));
+			} else {
+				spinner.finish_with_message(self.ui.format_err(format!(
+					"Building target {} FAILED! {}",
+					_target,
+					result.err().unwrap()
+				)));
+			}
 
 			Ok(())
 		}

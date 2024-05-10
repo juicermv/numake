@@ -5,8 +5,8 @@ use std::{
 
 use console::{
 	Emoji,
-	Style,
-	Term,
+	Style
+	,
 };
 use dialoguer::{
 	Input,
@@ -22,8 +22,6 @@ use indicatif::{
 pub struct NumakeUI
 {
 	pub quiet: bool,
-	pub stdout: Term,
-	pub stderr: Term,
 	pub progress_manager: MultiProgress,
 
 	style_ok: Style,
@@ -38,8 +36,6 @@ impl NumakeUI
 	{
 		NumakeUI {
 			quiet,
-			stdout: Term::stdout(),
-			stderr: Term::stderr(),
 
 			progress_manager: MultiProgress::with_draw_target(
 				if !quiet {
@@ -72,10 +68,10 @@ impl NumakeUI
 	) -> Result<()>
 	{
 		if !self.quiet {
-			self.stdout.write_line(&self.format_ok(out))
-		} else {
-			Ok(())
+			println!("{}", &self.format_ok(out));
 		}
+
+		Ok(())
 	}
 
 	pub fn format_warn(
@@ -94,10 +90,10 @@ impl NumakeUI
 	) -> Result<()>
 	{
 		if !self.quiet {
-			self.stdout.write_line(&self.format_warn(out))
-		} else {
-			Ok(())
+			println!("{}", &self.format_warn(out));
 		}
+
+		Ok(())
 	}
 
 	pub fn format_err(
@@ -116,10 +112,10 @@ impl NumakeUI
 	) -> Result<()>
 	{
 		if !self.quiet {
-			self.stderr.write_line(&self.format_err(out))
-		} else {
-			Ok(())
+			println!("{}", &self.format_err(out));
 		}
+
+		Ok(())
 	}
 
 	pub fn format_info(
@@ -136,10 +132,10 @@ impl NumakeUI
 	) -> Result<()>
 	{
 		if !self.quiet {
-			self.stderr.write_line(&self.format_info(out))
-		} else {
-			Ok(())
+			println!("{}", &self.format_info(out))
 		}
+
+		Ok(())
 	}
 
 	pub fn format_question(
@@ -176,10 +172,7 @@ impl NumakeUI
 		prompt: String,
 	) -> String
 	{
-		Input::new()
-			.with_prompt(prompt)
-			.interact_text_on(&self.stdout)
-			.unwrap()
+		Input::new().with_prompt(prompt).interact_text().unwrap()
 	}
 
 	pub fn list_select(
@@ -191,10 +184,10 @@ impl NumakeUI
 		MultiSelect::new()
 			.with_prompt(prompt)
 			.items(items.as_slice())
-			.interact_on(&self.stdout)
+			.interact()
 			.unwrap()
 			.iter()
-			.map(|index| items.get(*index).unwrap().clone())
+			.map(|index| items.get(index.clone()).unwrap().clone())
 			.collect()
 	}
 }

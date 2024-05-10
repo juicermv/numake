@@ -9,7 +9,15 @@ use std::{
 };
 
 use anyhow::anyhow;
-use indicatif::ProgressBar;
+use console::{
+	Alignment,
+	pad_str_with,
+	Term,
+};
+use indicatif::{
+	ProgressBar,
+	TermLike,
+};
 use mlua::{
 	FromLua,
 	Lua,
@@ -216,14 +224,19 @@ impl TargetTrait for GenericTarget
 					.current_dir(&parent_workspace.working_directory),
 			)?;
 
-			progress.println(self.ui.format_info(format!(
-				"{} exited with {}.",
-				toolset_compiler.clone().unwrap_or("NULL".to_string()),
-				status
-			)));
+			progress.println(pad_str_with(
+				&self.ui.format_info(format!(
+					"{} exited with {}.",
+					toolset_compiler.clone().unwrap_or("NULL".to_string()),
+					status
+				)),
+				Term::stdout().width() as usize,
+				Alignment::Center,
+				None,
+				' ',
+			));
 
 			if !status.success() {
-				self.ui.print_err("Aborting...".to_string())?;
 				progress.finish_and_clear();
 				Err(anyhow!(status))?
 			}
@@ -259,11 +272,17 @@ impl TargetTrait for GenericTarget
 				.current_dir(&parent_workspace.working_directory),
 		)?;
 
-		progress.println(self.ui.format_info(format!(
-			"{} exited with {}.",
-			toolset_linker.clone().unwrap_or("NULL".to_string()),
-			status
-		)));
+		progress.println(pad_str_with(
+			&self.ui.format_info(format!(
+				"{} exited with {}.",
+				toolset_linker.clone().unwrap_or("NULL".to_string()),
+				status
+			)),
+			Term::stdout().width() as usize,
+			Alignment::Center,
+			None,
+			' ',
+		));
 
 		self.copy_assets(&out_dir)?;
 
