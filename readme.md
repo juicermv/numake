@@ -1,5 +1,5 @@
 > [!WARNING]
-> THIS IS A WIP AND IN NO WAY PRODUCTION READY! THERE'S NO ERROR HANDLING!
+> THIS IS A WIP!
 
 # NuMake is a small, portable, and easy-to-use cross-platform C/C++ build system!
 

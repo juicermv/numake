@@ -14,6 +14,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+  GH_TOKEN: ${{ github.token }}
+
 jobs:
   test-x86_64-unknown-linux-gnu:
     runs-on: ubuntu-latest
@@ -32,6 +34,9 @@ jobs:
   build-release-x86_64-unknown-linux-gnu:
     runs-on: self-hosted
     needs: test-x86_64-unknown-linux-gnu
+
+    permissions:
+        contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -73,25 +78,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install MinGW
-        run: |
-          sudo apt-get install mingw-w64
       
       - name: Run tests
         run: cargo test mingw_build --verbose -- --nocapture
 
   build-release-x86_64-pc-windows-gnu:
-    runs-on: self-hosted
+    runs-on: windows-latest
     needs: test-x86_64-pc-windows-gnu
+
+    permissions:
+        contents: write
     
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install MinGW
-        run: |
-          sudo apt-get install mingw-w64
-
       - name: Install toolchain
         run: rustup target add x86_64-pc-windows-gnu
     
@@ -109,15 +109,11 @@ jobs:
 
 
   build-debug-x86_64-pc-windows-gnu:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: test-x86_64-pc-windows-gnu
     
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install MinGW
-        run: |
-          sudo apt-get install mingw-w64
 
       - name: Install toolchain
         run: rustup target add x86_64-pc-windows-gnu
