@@ -13,6 +13,4 @@ NuMake utilizes [Luau](https://github.com/Roblox/Luau), a sandboxed version of L
 
 ## Usage
 
-First, build NuMake using `cargo build` so you can actually start using it! 
-This will output the executable you can pass arguments to!
-Now continue on to the wiki! (TBD)
+First, either build numake itself or grab a binary from the releases. You can check out examples for examples of how the Lua stuff works. You can run `numake help` to get help for the command-line executable.
