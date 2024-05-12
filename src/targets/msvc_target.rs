@@ -261,7 +261,7 @@ impl TargetTrait for MSVCTarget
 	fn build(
 		&self,
 		parent_workspace: &mut LuaWorkspace,
-		progress: &ProgressBar,
+		_: &ProgressBar,
 	) -> anyhow::Result<()>
 	{
 		let obj_dir: PathBuf = parent_workspace

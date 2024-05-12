@@ -124,7 +124,7 @@ impl TargetTrait for GenericTarget
 	fn build(
 		&self,
 		parent_workspace: &mut LuaWorkspace,
-		progress: &ProgressBar,
+		_: &ProgressBar
 	) -> anyhow::Result<()>
 	{
 		let obj_dir: PathBuf = parent_workspace
@@ -240,7 +240,7 @@ impl TargetTrait for GenericTarget
 			&out_dir.to_str().unwrap_or("ERROR"),
 			&output.unwrap_or("out".to_string())
 		));
-		
+
 		self.execute(
 			linker
 				.args(&linker_args)
