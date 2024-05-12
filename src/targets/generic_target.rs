@@ -24,7 +24,7 @@ use serde::Serialize;
 use crate::{
 	error::NUMAKE_ERROR,
 	lua_workspace::LuaWorkspace,
-	target::TargetTrait,
+	targets::target::TargetTrait,
 	ui::NumakeUI,
 	util::to_lua_result,
 };
@@ -235,6 +235,12 @@ impl TargetTrait for GenericTarget
 			linker_args.push(flag)
 		}
 
+		linker_args.push(format!(
+			"-o{}/{}",
+			&out_dir.to_str().unwrap_or("ERROR"),
+			&output.unwrap_or("out".to_string())
+		));
+		
 		self.execute(
 			linker
 				.args(&linker_args)

@@ -13,9 +13,9 @@ use mlua::{
 use serde::Serialize;
 
 use crate::{
-	generic_target::GenericTarget,
 	lua_workspace::LuaWorkspace,
-	msvc_target::MSVCTarget,
+	targets::generic_target::GenericTarget,
+	targets::msvc_target::MSVCTarget,
 };
 
 pub trait TargetTrait

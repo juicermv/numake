@@ -27,7 +27,7 @@ use tempfile::tempdir;
 use crate::{
 	error::NUMAKE_ERROR,
 	lua_workspace::LuaWorkspace,
-	target::TargetTrait,
+	targets::target::TargetTrait,
 	ui::NumakeUI,
 	util::{
 		download_vswhere,
