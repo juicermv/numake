@@ -11,15 +11,7 @@ use std::{
 };
 
 use anyhow::anyhow;
-use console::{
-	Alignment,
-	pad_str_with,
-	Term,
-};
-use indicatif::{
-	ProgressBar,
-	TermLike,
-};
+use indicatif::ProgressBar;
 use mlua::{
 	FromLua,
 	Lua,
@@ -306,8 +298,9 @@ impl TargetTrait for MSVCTarget
 			parent_workspace.output.clone()
 		};
 
+		// COMPILATION STEP
 		for file in self.files.clone() {
-			let mut compiler = Command::new("cl");
+			let mut compiler = Command::new("CL");
 
 			let o_file = obj_dir.join(
 				diff_paths(&file, self.workdir.clone())
@@ -342,29 +335,17 @@ impl TargetTrait for MSVCTarget
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			let status = self.execute(
+			self.execute(
 				compiler
 					.envs(&msvc_env)
 					.args(&compiler_args)
 					.current_dir(&parent_workspace.working_directory),
 			)?;
-
-			progress.println(pad_str_with(
-				&self.ui.format_info(format!("CL exited with {}.", status)),
-				Term::stdout().width() as usize,
-				Alignment::Center,
-				None,
-				' ',
-			));
-
-			if !status.success() {
-				progress.finish_and_clear();
-				Err(anyhow!(status))?
-			}
 		}
 
+		// RESOURCE FILE HANDLING
 		for resource_file in self.resources.clone() {
-			let mut resource_compiler = Command::new("rc");
+			let mut resource_compiler = Command::new("RC");
 
 			let res_file = res_dir.join(
 				diff_paths(&resource_file, self.workdir.clone())
@@ -394,27 +375,15 @@ impl TargetTrait for MSVCTarget
 			res_compiler_args
 				.push(resource_file.to_str().unwrap_or("ERROR").to_string());
 
-			let status = self.execute(
+			self.execute(
 				resource_compiler
 					.envs(&msvc_env)
 					.args(&res_compiler_args)
 					.current_dir(&parent_workspace.working_directory),
 			)?;
 
-			progress.println(pad_str_with(
-				&self.ui.format_info(format!("RC exited with {}.", status)),
-				Term::stdout().width() as usize,
-				Alignment::Center,
-				None,
-				' ',
-			));
-
-			if !status.success() {
-				progress.finish_and_clear();
-				Err(anyhow!(status))?
-			}
-
-			let mut cvtres = Command::new("cvtres");
+			// TURN RES FILES INTO OBJECTS
+			let mut cvtres = Command::new("CVTRES");
 
 			let rbj_file = obj_dir.join(
 				diff_paths(&resource_file, self.workdir.clone())
@@ -439,31 +408,17 @@ impl TargetTrait for MSVCTarget
 
 			cvtres_args.push(res_file.to_str().unwrap_or("ERROR").to_string());
 
-			let status = self.execute(
+			self.execute(
 				cvtres
 					.envs(&msvc_env)
 					.args(&cvtres_args)
 					.current_dir(&parent_workspace.working_directory),
 			)?;
-
-			progress.println(pad_str_with(
-				&self
-					.ui
-					.format_info(format!("CVTRES exited with {}.", status)),
-				Term::stdout().width() as usize,
-				Alignment::Center,
-				None,
-				' ',
-			));
-
-			if !status.success() {
-				progress.finish_and_clear();
-				Err(anyhow!(status))?
-			}
 		}
 
+		// LINKING STEP
 		let mut linker =
-			Command::new(if self.static_lib { "lib" } else { "link" });
+			Command::new(if self.static_lib { "LIB" } else { "LINK" });
 		let mut linker_args = Vec::new();
 
 		linker_args.push(format!(
@@ -489,24 +444,12 @@ impl TargetTrait for MSVCTarget
 
 		linker_args.append(&mut self.libs.clone());
 
-		let status = self.execute(
+		self.execute(
 			linker
 				.args(&linker_args)
 				.envs(&msvc_env)
 				.current_dir(&parent_workspace.working_directory),
 		)?;
-
-		progress.println(pad_str_with(
-			&self.ui.format_info(format!(
-				"{} exited with {}.",
-				if self.static_lib { "LIB" } else { "LINK" },
-				status
-			)),
-			Term::stdout().width() as usize,
-			Alignment::Center,
-			None,
-			' ',
-		));
 
 		self.copy_assets(&out_dir)?;
 
@@ -542,7 +485,23 @@ impl TargetTrait for MSVCTarget
 			)?;
 		}
 
-		Ok(output.status)
+		if output.status.success() {
+			self.ui.progress_manager.println(self.ui.format_ok(format!(
+				"{} exited with {}",
+				cmd.get_program().to_str().unwrap(),
+				output.status
+			)))?;
+			Ok(output.status)
+		} else {
+			self.ui
+				.progress_manager
+				.println(self.ui.format_err(format!(
+					"{} exited with {}",
+					cmd.get_program().to_str().unwrap(),
+					output.status
+				)))?;
+			Err(anyhow!(output.status))
+		}
 	}
 }
 

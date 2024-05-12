@@ -22,12 +22,10 @@ use crate::{
 mod cache;
 mod cli_args;
 mod error;
-mod generic_target;
 mod lua_workspace;
-mod msvc_target;
-mod target;
 mod ui;
 mod util;
+mod targets;
 
 fn run() -> anyhow::Result<()>
 {

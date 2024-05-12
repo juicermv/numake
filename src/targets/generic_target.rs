@@ -9,15 +9,7 @@ use std::{
 };
 
 use anyhow::anyhow;
-use console::{
-	Alignment,
-	pad_str_with,
-	Term,
-};
-use indicatif::{
-	ProgressBar,
-	TermLike,
-};
+use indicatif::ProgressBar;
 use mlua::{
 	FromLua,
 	Lua,
@@ -218,28 +210,11 @@ impl TargetTrait for GenericTarget
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			let status = self.execute(
+			self.execute(
 				compiler
 					.args(&compiler_args)
 					.current_dir(&parent_workspace.working_directory),
 			)?;
-
-			progress.println(pad_str_with(
-				&self.ui.format_info(format!(
-					"{} exited with {}.",
-					toolset_compiler.clone().unwrap_or("NULL".to_string()),
-					status
-				)),
-				Term::stdout().width() as usize,
-				Alignment::Center,
-				None,
-				' ',
-			));
-
-			if !status.success() {
-				progress.finish_and_clear();
-				Err(anyhow!(status))?
-			}
 		}
 
 		let mut linker =
@@ -256,33 +231,15 @@ impl TargetTrait for GenericTarget
 			linker_args.push(format!("-l{lib}"))
 		}
 
-		linker_args.push(format!(
-			"-o{}/{}",
-			&out_dir.to_str().unwrap_or("ERROR"),
-			&output.unwrap_or("out".to_string())
-		));
-
 		for flag in self.linker_flags.clone() {
 			linker_args.push(flag)
 		}
 
-		let status = self.execute(
+		self.execute(
 			linker
 				.args(&linker_args)
 				.current_dir(&parent_workspace.working_directory),
 		)?;
-
-		progress.println(pad_str_with(
-			&self.ui.format_info(format!(
-				"{} exited with {}.",
-				toolset_linker.clone().unwrap_or("NULL".to_string()),
-				status
-			)),
-			Term::stdout().width() as usize,
-			Alignment::Center,
-			None,
-			' ',
-		));
 
 		self.copy_assets(&out_dir)?;
 
@@ -306,7 +263,23 @@ impl TargetTrait for GenericTarget
 			)?;
 		}
 
-		Ok(output.status)
+		if output.status.success() {
+			self.ui.progress_manager.println(self.ui.format_ok(format!(
+				"{} exited with {}",
+				cmd.get_program().to_str().unwrap(),
+				output.status
+			)))?;
+			Ok(output.status)
+		} else {
+			self.ui
+				.progress_manager
+				.println(self.ui.format_err(format!(
+					"{} exited with {}",
+					cmd.get_program().to_str().unwrap(),
+					output.status
+				)))?;
+			Err(anyhow!(output.status))
+		}
 	}
 }
 

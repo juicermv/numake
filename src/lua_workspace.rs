@@ -31,11 +31,13 @@ use crate::{
 		NuMakeArgs,
 	},
 	error::NUMAKE_ERROR,
-	generic_target::GenericTarget,
-	msvc_target::MSVCTarget,
-	target::{
-		Target,
-		TargetTrait,
+	targets::{
+		generic_target::GenericTarget,
+		msvc_target::MSVCTarget,
+		target::{
+			Target,
+			TargetTrait,
+		},
 	},
 	ui::NumakeUI,
 	util::{
@@ -383,7 +385,8 @@ impl LuaWorkspace
 			let spinner =
 				self.ui.spinner(format!("Building target {}...", _target));
 			let now = SystemTime::now();
-			let result = self.targets
+			let result = self
+				.targets
 				.get(_target)
 				.unwrap()
 				.build(&mut self.clone(), &spinner);
