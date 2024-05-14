@@ -59,9 +59,8 @@ msvc_x86.arch = "x86"
 
 
 --- MINGW 64 BIT TARGET
-mingw = workspace:create_target("mingw")
-mingw.compiler = "x86_64-w64-mingw32-g++"
-mingw.linker = mingw.compiler
+mingw = workspace:create_mingw_target("mingw")
+mingw.arch = "x86_64"
 
 mingw.output = "test.exe"
 mingw.include_paths = { sdl_path_mingw .. "/x86_64-w64-mingw32/include" }
@@ -86,16 +85,15 @@ mingw.libraries = {
     "uuid"
 }
 
-mingw.compiler_flags = {"--verbose", "-mwindows", "-static", "-Wl,-Bstatic"}
-mingw.linker_flags = mingw.compiler_flags
+mingw.compiler_flags = {"--verbose", "-mwindows", "-static"}
+mingw.linker_flags = { "--high-entropy-va", "-subsystem", "windows", "--nxcompat", "-Bstatic"}
 mingw.assets = { [sdl_path_mingw .. "/x86_64-w64-mingw32/bin/SDL2.dll"] = "SDL2.dll" }
 mingw.files = { "main.cpp "}
 --- END MINGW 64 BIT TARGET
 
 --- MINGW 32 BIT TARGET
-mingw_i686 = workspace:create_target("mingw_i686")
-mingw_i686.compiler = "i686-w64-mingw32-g++"
-mingw_i686.linker = mingw_i686.compiler
+mingw_i686 = workspace:create_mingw_target("mingw_i686")
+mingw_i686.arch = "i686"
 
 mingw_i686.output = "test.exe"
 mingw_i686.include_paths = { sdl_path_mingw .. "/i686-w64-mingw32/include" }
@@ -120,8 +118,8 @@ mingw_i686.libraries = {
     "uuid"
 }
 
-mingw_i686.compiler_flags = {"--verbose", "-mwindows", "-static", "-Wl,-Bstatic"}
-mingw_i686.linker_flags = mingw_i686.compiler_flags
+mingw_i686.compiler_flags = {"--verbose", "-mwindows", "-static" }
+mingw_i686.linker_flags = { "-subsystem", "windows", "--nxcompat", "-Bstatic"}
 mingw_i686.assets = { [sdl_path_mingw .. "/i686-w64-mingw32/bin/SDL2.dll"] = "SDL2.dll" }
 mingw_i686.files = { "main.cpp "}
 --- END MINGW 32 BIT TARGET

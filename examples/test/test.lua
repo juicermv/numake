@@ -1,14 +1,13 @@
-inspect = workspace:require_url("https://raw.githubusercontent.com/kikito/inspect.lua/master/inspect.lua")
+inspect = workspace:load_url("https://raw.githubusercontent.com/kikito/inspect.lua/master/inspect.lua")
 
 if workspace:get("test") == nil then
     workspace:set("test", 1234)
 end
 
 sdl_path = workspace:download_zip("https://github.com/libsdl-org/SDL/releases/download/release-2.30.2/SDL2-devel-2.30.2-mingw.zip") .. "/SDL2-2.30.2/x86_64-w64-mingw32"
-mingw = workspace:create_target("mingw")
+mingw = workspace:create_mingw_target("mingw")
 
-mingw.compiler = "x86_64-w64-mingw32-g++"
-mingw.linker = mingw.compiler
+mingw.arch = "x86_64"
 
 mingw.output = "test.exe"
 mingw.include_paths = {sdl_path .. "/include"}
@@ -33,8 +32,8 @@ mingw.libraries = {
     "uuid"
 }
 
-mingw.compiler_flags = {"--verbose", "-mwindows", "-Wl,--nxcompat", "-Wl,--high-entropy-va", "-static", "-Wl,-Bstatic"}
-mingw.linker_flags = mingw.compiler_flags
+mingw.compiler_flags = {"--verbose", "-mwindows", "-static"}
+mingw.linker_flags = { "--high-entropy-va", "-subsystem", "windows", "--nxcompat", "-Bstatic"}
 mingw.assets = { [sdl_path .. "/bin/SDL2.dll"] = "SDL2.dll" }
 mingw.files = workspace:walk_dir("src")
 
