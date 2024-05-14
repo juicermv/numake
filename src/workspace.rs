@@ -12,7 +12,6 @@ use mlua::{
 		LuaError,
 		LuaValue,
 	},
-	Chunk,
 	Compiler,
 	FromLua,
 	Lua,

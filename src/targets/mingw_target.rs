@@ -1,9 +1,6 @@
 use std::{
 	collections::HashMap,
-	fmt::format,
 	fs,
-	fs::File,
-	io::Write,
 	path::PathBuf,
 	process::{
 		Command,
@@ -23,14 +20,12 @@ use mlua::{
 };
 use pathdiff::diff_paths;
 use serde::Serialize;
-use tempfile::tempdir;
 
 use crate::{
 	error::NUMAKE_ERROR,
 	targets::target::TargetTrait,
 	ui::NumakeUI,
 	util::{
-		download_vswhere,
 		to_lua_result,
 	},
 	workspace::LuaWorkspace,
