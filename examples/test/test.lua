@@ -79,4 +79,4 @@ workspace:register_target(mingw)
 workspace:register_target(msvc)
 
 print(workspace:get("test"))
-print(inspect(workspace:env()))
+print(inspect(workspace.env))

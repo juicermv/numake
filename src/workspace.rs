@@ -8,13 +8,14 @@ use std::{
 
 use anyhow::anyhow;
 use mlua::{
-	Compiler,
-	FromLua,
-	Lua,
 	prelude::{
 		LuaError,
 		LuaValue,
 	},
+	Chunk,
+	Compiler,
+	FromLua,
+	Lua,
 	UserData,
 	UserDataFields,
 	UserDataMethods,
@@ -33,6 +34,7 @@ use crate::{
 	error::NUMAKE_ERROR,
 	targets::{
 		generic_target::GenericTarget,
+		mingw_target::MINGWTarget,
 		msvc_target::MSVCTarget,
 		target::{
 			Target,
@@ -80,6 +82,13 @@ impl UserData for LuaWorkspace
 		fields.add_field_method_get("arguments", |lua, this| {
 			lua.create_table_from(args_to_map(this.arguments.clone()))
 		});
+
+		fields.add_field_method_get("env", |_, _| {
+			Ok(std::env::vars().collect::<HashMap<String, String>>())
+		});
+
+		fields
+			.add_field_method_get("platform", |_, _| Ok(std::env::consts::OS));
 	}
 
 	fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M)
@@ -104,6 +113,15 @@ impl UserData for LuaWorkspace
 			))
 		});
 
+		methods.add_method("create_mingw_target", |_, this, name: String| {
+			to_lua_result(MINGWTarget::new(
+				name,
+				this.output.clone(),
+				this.working_directory.clone(),
+				this.ui.clone(),
+			))
+		});
+
 		methods.add_method_mut("register_target", |_, this, target: Target| {
 			Ok(this.targets.insert(target.get_name(), target))
 		});
@@ -112,9 +130,14 @@ impl UserData for LuaWorkspace
 			to_lua_result(this.workspace_download_zip(url))
 		});
 
-		methods.add_method_mut("require_url", |lua, this, url: String| {
-			let chunk = to_lua_result(this.require_url(&url))?;
-			lua.load(chunk).eval::<LuaValue>()
+		methods.add_method_mut("load_url", |lua, this, url: String| {
+			let chunk = to_lua_result(this.load_url(&url))?;
+			lua.load(chunk).set_name(url).eval::<LuaValue>()
+		});
+
+		methods.add_method_mut("load", |lua, this, path: String| {
+			let chunk = to_lua_result(this.load(&path))?;
+			lua.load(chunk).set_name(path).eval::<LuaValue>()
 		});
 
 		methods.add_method_mut(
@@ -146,7 +169,7 @@ impl UserData for LuaWorkspace
 					recursive,
 					&filter,
 				))?
-					.clone();
+				.clone();
 
 				let paths_str = paths
 					.iter()
@@ -162,10 +185,6 @@ impl UserData for LuaWorkspace
 				this.ui.input(this.ui.format_question(prompt))
 			}))
 		});*/
-
-		methods.add_method("env", |_, _, ()| {
-			Ok(std::env::vars().collect::<HashMap<String, String>>())
-		});
 	}
 }
 
@@ -256,6 +275,8 @@ impl LuaWorkspace
 	{
 		let spinner = self.ui.spinner("Processing script...".to_string());
 		let now = SystemTime::now();
+		std::env::set_current_dir(&self.working_directory)?;
+
 		lua_state.set_compiler(
 			Compiler::new()
 				.set_debug_level(2)
@@ -356,6 +377,9 @@ impl LuaWorkspace
 					Target::MSVC(_) => {
 						format!("{} [MSVC], ", name)
 					}
+					Target::MINGW(_) => {
+						format!("{} [MINGW], ", name)
+					}
 				}
 			})
 			.collect())
@@ -408,7 +432,48 @@ impl LuaWorkspace
 		}
 	}
 
-	fn require_url(
+	fn load(
+		&mut self,
+		path: &String,
+	) -> anyhow::Result<Vec<u8>>
+	{
+		let file = self.working_directory.join(path);
+		if file.starts_with(&self.working_directory) && file.exists() {
+			let file_size = file.metadata()?.len().to_string();
+			let file_size_toml = toml::Value::from(file_size.clone());
+			let file_name = &file.to_str().unwrap().to_string();
+			let file_cache_exists: bool =
+				self.cache.check_key_exists(file_name)
+					&& self.cache.check_file_exists(file_name)
+					&& self.cache.get_value(file_name).is_some();
+			let cached_file_size = if file_cache_exists {
+				self.cache.get_value(file_name).unwrap().clone()
+			} else {
+				toml::Value::String("-1".to_string())
+			};
+
+			if file_cache_exists && cached_file_size == file_size_toml {
+				Ok(self.cache.read_file(file_name)?)
+			} else {
+				let file_content = fs::read(&file)?;
+				let bytes = Compiler::new()
+					.set_debug_level(0)
+					.set_optimization_level(2)
+					.set_coverage_level(2)
+					.compile(&file_content);
+
+				self.cache.write_file(file_name, &bytes)?;
+
+				self.cache.set_value(file_name, file_size_toml.clone())?;
+
+				Ok(bytes)
+			}
+		} else {
+			Err(anyhow!(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))
+		}
+	}
+
+	fn load_url(
 		&mut self,
 		url: &String,
 	) -> anyhow::Result<Vec<u8>>
@@ -462,9 +527,9 @@ impl LuaWorkspace
 			self.ui
 				.progress_manager
 				.println(self.ui.format_warn(format!(
-					"Cache entry for [{}] found. \nNot downloading. This is okay!",
-					url
-				)))?;
+				"Cache entry for [{}] found. \nNot downloading. This is okay!",
+				url
+			)))?;
 			Ok(self.cache.get_dir(&url)?.to_str().unwrap().to_string())
 		} else {
 			let response = reqwest::blocking::get(&url)?;

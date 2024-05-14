@@ -12,17 +12,17 @@ use console::{
 use mlua::Lua;
 
 use crate::{
-	cli_args::{
+    cli_args::{
 		Cli,
 		SubCommands,
 	},
-	lua_workspace::LuaWorkspace,
+    workspace::LuaWorkspace,
 };
 
 mod cache;
 mod cli_args;
 mod error;
-mod lua_workspace;
+mod workspace;
 mod ui;
 mod util;
 mod targets;
@@ -82,8 +82,8 @@ mod tests
 	use mlua::Lua;
 
 	use crate::{
-		cli_args::NuMakeArgs,
-		lua_workspace::LuaWorkspace,
+        cli_args::NuMakeArgs,
+        workspace::LuaWorkspace,
 	};
 
 	#[test]

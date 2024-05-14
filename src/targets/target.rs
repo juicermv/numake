@@ -13,9 +13,12 @@ use mlua::{
 use serde::Serialize;
 
 use crate::{
-	lua_workspace::LuaWorkspace,
-	targets::generic_target::GenericTarget,
-	targets::msvc_target::MSVCTarget,
+	targets::{
+		generic_target::GenericTarget,
+		mingw_target::MINGWTarget,
+		msvc_target::MSVCTarget,
+	},
+	workspace::LuaWorkspace,
 };
 
 pub trait TargetTrait
@@ -37,6 +40,7 @@ pub enum Target
 {
 	Generic(GenericTarget),
 	MSVC(MSVCTarget),
+	MINGW(MINGWTarget),
 }
 
 impl Target
@@ -46,6 +50,7 @@ impl Target
 		match self {
 			Target::Generic(target) => target.name.clone(),
 			Target::MSVC(target) => target.name.clone(),
+			Target::MINGW(target) => target.name.clone(),
 		}
 	}
 }
@@ -61,6 +66,7 @@ impl TargetTrait for Target
 		match self {
 			Target::Generic(target) => target.build(parent_workspace, progress),
 			Target::MSVC(target) => target.build(parent_workspace, progress),
+			Target::MINGW(target) => target.build(parent_workspace, progress),
 		}
 	}
 
@@ -72,6 +78,7 @@ impl TargetTrait for Target
 		match self {
 			Target::Generic(target) => target.execute(cmd),
 			Target::MSVC(target) => target.execute(cmd),
+			Target::MINGW(target) => target.execute(cmd),
 		}
 	}
 }
@@ -86,6 +93,7 @@ impl<'lua> IntoLua<'lua> for Target
 		match self {
 			Target::Generic(target) => target.into_lua(lua),
 			Target::MSVC(target) => target.into_lua(lua),
+			Target::MINGW(target) => target.into_lua(lua),
 		}
 	}
 }
@@ -105,6 +113,8 @@ impl<'lua> FromLua<'lua> for Target
 					Ok(Self::Generic(
 						user_data.borrow::<GenericTarget>()?.clone(),
 					))
+				} else if user_data.is::<MINGWTarget>() {
+					Ok(Self::MINGW(user_data.borrow::<MINGWTarget>()?.clone()))
 				} else {
 					Err(mlua::Error::runtime(
 						"Tried to convert invalid target type to Target!",

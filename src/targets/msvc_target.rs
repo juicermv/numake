@@ -25,11 +25,11 @@ use serde::Serialize;
 use tempfile::tempdir;
 
 use crate::{
-	error::NUMAKE_ERROR,
-	lua_workspace::LuaWorkspace,
-	targets::target::TargetTrait,
-	ui::NumakeUI,
-	util::{
+    error::NUMAKE_ERROR,
+    workspace::LuaWorkspace,
+    targets::target::TargetTrait,
+    ui::NumakeUI,
+    util::{
 		download_vswhere,
 		to_lua_result,
 	},
