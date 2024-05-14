@@ -25,9 +25,7 @@ use crate::{
 	error::NUMAKE_ERROR,
 	targets::target::TargetTrait,
 	ui::NumakeUI,
-	util::{
-		to_lua_result,
-	},
+	util::to_lua_result,
 	workspace::LuaWorkspace,
 };
 
@@ -275,7 +273,7 @@ impl TargetTrait for MINGWTarget
 			let mut res_compiler_args = Vec::from([
 				"-v".to_string(),
 				resource_file.to_str().unwrap_or("ERROR").to_string(),
-				"-OCOFF".to_string()
+				"-OCOFF".to_string(),
 			]);
 
 			for incl in self.include_paths.clone() {
@@ -300,7 +298,14 @@ impl TargetTrait for MINGWTarget
 
 		if !self.static_lib {
 			// LINKING STEP
-			let mut linker = Command::new(mingw.clone() + "ld");
+			let mut linker = Command::new(
+				mingw.clone()
+					+ if self.lang.to_lowercase() == "c++" {
+					"g++"
+				} else {
+					"gcc"
+				},
+			);
 			let mut linker_args = Vec::new();
 
 			linker_args.append(&mut o_files);
@@ -318,7 +323,7 @@ impl TargetTrait for MINGWTarget
 			}
 
 			for flag in self.linker_flags.clone() {
-				linker_args.push(flag)
+				linker_args.push("-Wl,".to_string() + &flag)
 			}
 
 			linker_args.push(format!(
