@@ -6,26 +6,26 @@
 
 use clap::Parser;
 use console::{
-	Emoji,
 	style,
+	Emoji,
 };
 use mlua::Lua;
 
 use crate::{
-    cli_args::{
+	cli_args::{
 		Cli,
 		SubCommands,
 	},
-    workspace::LuaWorkspace,
+	workspace::LuaWorkspace,
 };
 
 mod cache;
 mod cli_args;
 mod error;
-mod workspace;
+mod targets;
 mod ui;
 mod util;
-mod targets;
+mod workspace;
 
 fn run() -> anyhow::Result<()>
 {
@@ -70,8 +70,8 @@ fn main()
 				Emoji("⛔", "ERROR!"),
 				result.err().unwrap()
 			))
-				.red()
-				.bold()
+			.red()
+			.bold()
 		)
 	}
 }
@@ -79,11 +79,13 @@ fn main()
 #[cfg(test)]
 mod tests
 {
+	use std::env;
+
 	use mlua::Lua;
 
 	use crate::{
-        cli_args::NuMakeArgs,
-        workspace::LuaWorkspace,
+		cli_args::NuMakeArgs,
+		workspace::LuaWorkspace,
 	};
 
 	#[test]
@@ -105,7 +107,7 @@ mod tests
 		proj.build()?;
 
 		let mut test_exec =
-			std::process::Command::new("examples/test/.numake/out/gcc/test");
+			std::process::Command::new(".numake/out/gcc/test");
 		assert_eq!(test_exec.status()?.code(), Some(0));
 		Ok(())
 	}
@@ -156,7 +158,8 @@ mod tests
 
 		let mut test_exec = std::process::Command::new(
 			"examples/test/.numake/out/msvc/test.exe",
-		).output()?;
+		)
+		.output()?;
 		println!("{}", String::from_utf8_lossy(test_exec.stdout.as_slice()));
 		println!("{}", String::from_utf8_lossy(test_exec.stderr.as_slice()));
 
