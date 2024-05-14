@@ -131,7 +131,7 @@ mod tests
 		proj.build()?;
 
 		let mut test_exec = std::process::Command::new(
-			"examples/test/.numake/out/mingw/test.exe",
+			".numake/out/mingw/test.exe",
 		);
 		assert_eq!(test_exec.status()?.code(), Some(0));
 		Ok(())
@@ -157,7 +157,7 @@ mod tests
 		proj.build()?;
 
 		let mut test_exec = std::process::Command::new(
-			"examples/test/.numake/out/msvc/test.exe",
+			".numake/out/msvc/test.exe",
 		)
 		.output()?;
 		println!("{}", String::from_utf8_lossy(test_exec.stdout.as_slice()));
