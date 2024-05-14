@@ -129,6 +129,8 @@ mod tests
 		let mut proj = LuaWorkspace::new(&args)?;
 		proj.process(&Lua::new())?;
 		proj.build()?;
+		
+		println!("{}", env::current_dir()?.to_str().unwrap());
 
 		let mut test_exec = std::process::Command::new(
 			".numake/out/mingw/test.exe",
