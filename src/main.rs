@@ -66,10 +66,12 @@ fn main() -> anyhow::Result<()>
 {
 	let result = run();
 	if result.is_err() {
+		let err = result.err().unwrap();
 		Err(anyhow!(style(format!(
-			"{} {}",
+			"{} {}\n{}",
 			Emoji("⛔", "ERROR!"),
-			result.err().unwrap()
+			err,
+			err.backtrace()
 		))
 		.red()
 		.bold()))
