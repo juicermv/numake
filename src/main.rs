@@ -62,7 +62,7 @@ fn run() -> anyhow::Result<()>
 }
 
 #[cfg(not(test))]
-fn main() -> Result<(), i8>
+fn main() -> anyhow::Result<()>
 {
 	let result = run();
 	if result.is_err() {
@@ -74,7 +74,7 @@ fn main() -> Result<(), i8>
 		))
 		.red()
 		.bold());
-		Err(-1)
+		Err(err)
 	} else {
 		Ok(())
 	}

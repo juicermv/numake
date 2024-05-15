@@ -409,7 +409,8 @@ impl TargetTrait for MINGWTarget
 						output.status
 					),
 				))?;
-				Err(anyhow!(output.status))
+				let stderr = String::from_utf8_lossy(output.stderr.as_slice()).to_string();
+				Err(anyhow!(stderr))
 			}
 		}
 	}
