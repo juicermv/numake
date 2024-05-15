@@ -4,6 +4,7 @@
 	TODO: Optimization, Refactoring, Error Handling. THIS IS A WIP!
 */
 
+use std::io;
 use clap::Parser;
 use console::{
 	style,
@@ -59,21 +60,21 @@ fn run() -> anyhow::Result<()>
 }
 
 #[cfg(not(test))]
-fn main()
+fn main() -> anyhow::Result<()>
 {
 	let result = run();
 	if result.is_err() {
+		let err = result.err().unwrap();
 		println!(
 			"{}",
-			style(format!(
-				"{} {}",
-				Emoji("⛔", "ERROR!"),
-				result.err().unwrap()
-			))
-			.red()
-			.bold()
-		)
+			style(format!("{} {}", Emoji("⛔", "ERROR!"), &err))
+				.red()
+				.bold()
+		);
+
+		Err(err)?
 	}
+	Ok(())
 }
 
 #[cfg(test)]
@@ -106,8 +107,7 @@ mod tests
 		proj.process(&Lua::new())?;
 		proj.build()?;
 
-		let mut test_exec =
-			std::process::Command::new(".numake/out/gcc/test");
+		let mut test_exec = std::process::Command::new(".numake/out/gcc/test");
 		assert_eq!(test_exec.status()?.code(), Some(0));
 		Ok(())
 	}
@@ -130,9 +130,8 @@ mod tests
 		proj.process(&Lua::new())?;
 		proj.build()?;
 
-		let mut test_exec = std::process::Command::new(
-			".numake/out/mingw/test.exe",
-		);
+		let mut test_exec =
+			std::process::Command::new(".numake/out/mingw/test.exe");
 		assert_eq!(test_exec.status()?.code(), Some(0));
 		Ok(())
 	}
@@ -156,10 +155,8 @@ mod tests
 		proj.process(&Lua::new())?;
 		proj.build()?;
 
-		let mut test_exec = std::process::Command::new(
-			".numake/out/msvc/test.exe",
-		)
-		.output()?;
+		let mut test_exec =
+			std::process::Command::new(".numake/out/msvc/test.exe").output()?;
 		println!("{}", String::from_utf8_lossy(test_exec.stdout.as_slice()));
 		println!("{}", String::from_utf8_lossy(test_exec.stderr.as_slice()));
 
