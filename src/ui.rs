@@ -154,9 +154,13 @@ impl NumakeUI
 	) -> ProgressBar
 	{
 		let bar = ProgressBar::new(length);
-		if self.quiet {
-			bar.set_draw_target(ProgressDrawTarget::hidden());
-		}
+		bar.set_draw_target(
+			if self.quiet {
+				ProgressDrawTarget::hidden()
+			} else {
+				ProgressDrawTarget::stdout()
+			},
+		);
 		self.progress_manager.add(bar)
 	}
 
@@ -175,9 +179,13 @@ impl NumakeUI
 			&self.style_question.apply_to("|").to_string(),
 			"-",
 		]));
-		if self.quiet {
-			spinner.set_draw_target(ProgressDrawTarget::hidden());
-		}
+		spinner.set_draw_target(
+			if self.quiet {
+				ProgressDrawTarget::hidden()
+			} else {
+				ProgressDrawTarget::stdout()
+			},
+		);
 		self.progress_manager.add(spinner)
 	}
 
