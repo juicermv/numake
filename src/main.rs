@@ -72,10 +72,10 @@ fn main() -> anyhow::Result<()>
 			result.err().unwrap()
 		))
 		.red()
-		.bold()))?
+		.bold()))
+	} else {
+		Ok(())
 	}
-
-	Ok(())
 }
 
 #[cfg(test)]
