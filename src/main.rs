@@ -5,6 +5,8 @@
 */
 
 use std::io;
+
+use anyhow::anyhow;
 use clap::Parser;
 use console::{
 	style,
@@ -64,16 +66,15 @@ fn main() -> anyhow::Result<()>
 {
 	let result = run();
 	if result.is_err() {
-		let err = result.err().unwrap();
-		println!(
-			"{}",
-			style(format!("{} {}", Emoji("⛔", "ERROR!"), &err))
-				.red()
-				.bold()
-		);
-
-		Err(err)?
+		Err(anyhow!(style(format!(
+			"{} {}",
+			Emoji("⛔", "ERROR!"),
+			result.err().unwrap()
+		))
+		.red()
+		.bold()))?
 	}
+
 	Ok(())
 }
 
