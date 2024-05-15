@@ -301,10 +301,10 @@ impl TargetTrait for MINGWTarget
 			let mut linker = Command::new(
 				mingw.clone()
 					+ if self.lang.to_lowercase() == "c++" {
-					"g++"
-				} else {
-					"gcc"
-				},
+						"g++"
+					} else {
+						"gcc"
+					},
 			);
 			let mut linker_args = Vec::new();
 
@@ -371,34 +371,46 @@ impl TargetTrait for MINGWTarget
 		cmd: &mut Command,
 	) -> anyhow::Result<ExitStatus>
 	{
-		let output = cmd.output()?;
-		let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-		if !self.ui.quiet && !stderr.is_empty() {
-			self.ui.progress_manager.println(
-				if output.status.success() {
-					self.ui.format_warn(stderr)
-				} else {
-					self.ui.format_err(stderr)
-				},
-			)?;
-		}
-
-		if output.status.success() {
-			self.ui.progress_manager.println(self.ui.format_ok(format!(
-				"{} exited with {}",
+		let result = cmd.output();
+		if result.is_err() {
+			let err = result.err().unwrap();
+			Err(anyhow!(format!(
+				"Error trying to execute {}! {}",
 				cmd.get_program().to_str().unwrap(),
-				output.status
-			)))?;
-			Ok(output.status)
+				err
+			)))
 		} else {
-			self.ui
-				.progress_manager
-				.println(self.ui.format_err(format!(
-					"{} exited with {}",
-					cmd.get_program().to_str().unwrap(),
-					output.status
-				)))?;
-			Err(anyhow!(output.status))
+			let output = result.ok().unwrap();
+			let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+			if !self.ui.quiet && !stderr.is_empty() {
+				self.ui.progress_manager.println(
+					if output.status.success() {
+						self.ui.format_warn(stderr)
+					} else {
+						self.ui.format_err(stderr)
+					},
+				)?;
+			}
+
+			if output.status.success() {
+				self.ui.progress_manager.println(self.ui.format_ok(
+					format!(
+						"{} exited with {}",
+						cmd.get_program().to_str().unwrap(),
+						output.status
+					),
+				))?;
+				Ok(output.status)
+			} else {
+				self.ui.progress_manager.println(self.ui.format_err(
+					format!(
+						"{} exited with {}",
+						cmd.get_program().to_str().unwrap(),
+						output.status
+					),
+				))?;
+				Err(anyhow!(output.status))
+			}
 		}
 	}
 }

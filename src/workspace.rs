@@ -419,15 +419,16 @@ impl LuaWorkspace
 					_target,
 					now.elapsed()?.as_millis()
 				)));
+				Ok(())
 			} else {
+				let err = result.err().unwrap();
 				spinner.finish_with_message(self.ui.format_err(format!(
-					"Building target {} FAILED! {}",
+					"Building target {} FAILED:",
 					_target,
-					result.err().unwrap()
 				)));
+				Err(err)
 			}
 
-			Ok(())
 		}
 	}
 

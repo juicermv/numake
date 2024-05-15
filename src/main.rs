@@ -62,19 +62,19 @@ fn run() -> anyhow::Result<()>
 }
 
 #[cfg(not(test))]
-fn main() -> anyhow::Result<()>
+fn main() -> Result<(), i8>
 {
 	let result = run();
 	if result.is_err() {
 		let err = result.err().unwrap();
-		Err(anyhow!(style(format!(
-			"{} {}\n{}",
+		println!("{}", style(format!(
+			"{} {}",
 			Emoji("⛔", "ERROR!"),
-			err,
-			err.backtrace()
+			err
 		))
 		.red()
-		.bold()))
+		.bold());
+		Err(-1)
 	} else {
 		Ok(())
 	}
