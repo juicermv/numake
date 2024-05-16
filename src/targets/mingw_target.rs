@@ -385,9 +385,9 @@ impl TargetTrait for MINGWTarget
 			if !self.ui.quiet && !stderr.is_empty() {
 				self.ui.progress_manager.println(
 					if output.status.success() {
-						self.ui.format_warn(stderr)
+						self.ui.format_warn(stderr.clone())
 					} else {
-						self.ui.format_err(stderr)
+						self.ui.format_err(stderr.clone())
 					},
 				)?;
 			}
@@ -409,7 +409,6 @@ impl TargetTrait for MINGWTarget
 						output.status
 					),
 				))?;
-				let stderr = String::from_utf8_lossy(output.stderr.as_slice()).to_string();
 				Err(anyhow!(stderr))
 			}
 		}

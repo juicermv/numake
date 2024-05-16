@@ -22,11 +22,11 @@ use pathdiff::diff_paths;
 use serde::Serialize;
 
 use crate::{
-    error::NUMAKE_ERROR,
-    workspace::LuaWorkspace,
-    targets::target::TargetTrait,
-    ui::NumakeUI,
-    util::to_lua_result,
+	error::NUMAKE_ERROR,
+	targets::target::TargetTrait,
+	ui::NumakeUI,
+	util::to_lua_result,
+	workspace::LuaWorkspace,
 };
 
 #[derive(Clone, Serialize)]
@@ -124,7 +124,7 @@ impl TargetTrait for GenericTarget
 	fn build(
 		&self,
 		parent_workspace: &mut LuaWorkspace,
-		_: &ProgressBar
+		_: &ProgressBar,
 	) -> anyhow::Result<()>
 	{
 		let obj_dir: PathBuf = parent_workspace
@@ -257,34 +257,46 @@ impl TargetTrait for GenericTarget
 		cmd: &mut Command,
 	) -> anyhow::Result<ExitStatus>
 	{
-		let output = cmd.output()?;
-		let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-		if !self.ui.quiet && !stderr.is_empty() {
-			self.ui.progress_manager.println(
-				if output.status.success() {
-					self.ui.format_warn(stderr)
-				} else {
-					self.ui.format_err(stderr)
-				},
-			)?;
-		}
-
-		if output.status.success() {
-			self.ui.progress_manager.println(self.ui.format_ok(format!(
-				"{} exited with {}",
+		let result = cmd.output();
+		if result.is_err() {
+			let err = result.err().unwrap();
+			Err(anyhow!(format!(
+				"Error trying to execute {}! {}",
 				cmd.get_program().to_str().unwrap(),
-				output.status
-			)))?;
-			Ok(output.status)
+				err
+			)))
 		} else {
-			self.ui
-				.progress_manager
-				.println(self.ui.format_err(format!(
-					"{} exited with {}",
-					cmd.get_program().to_str().unwrap(),
-					output.status
-				)))?;
-			Err(anyhow!(output.status))
+			let output = result.ok().unwrap();
+			let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+			if !self.ui.quiet && !stderr.is_empty() {
+				self.ui.progress_manager.println(
+					if output.status.success() {
+						self.ui.format_warn(stderr.clone())
+					} else {
+						self.ui.format_err(stderr.clone())
+					},
+				)?;
+			}
+
+			if output.status.success() {
+				self.ui.progress_manager.println(self.ui.format_ok(
+					format!(
+						"{} exited with {}",
+						cmd.get_program().to_str().unwrap(),
+						output.status
+					),
+				))?;
+				Ok(output.status)
+			} else {
+				self.ui.progress_manager.println(self.ui.format_err(
+					format!(
+						"{} exited with {}",
+						cmd.get_program().to_str().unwrap(),
+						output.status
+					),
+				))?;
+				Err(anyhow!(stderr))
+			}
 		}
 	}
 }

@@ -25,14 +25,14 @@ use serde::Serialize;
 use tempfile::tempdir;
 
 use crate::{
-    error::NUMAKE_ERROR,
-    workspace::LuaWorkspace,
-    targets::target::TargetTrait,
-    ui::NumakeUI,
-    util::{
+	error::NUMAKE_ERROR,
+	targets::target::TargetTrait,
+	ui::NumakeUI,
+	util::{
 		download_vswhere,
 		to_lua_result,
 	},
+	workspace::LuaWorkspace,
 };
 
 #[derive(Clone, Serialize)]
@@ -461,46 +461,48 @@ impl TargetTrait for MSVCTarget
 		cmd: &mut Command,
 	) -> anyhow::Result<ExitStatus>
 	{
-		let output = cmd.output()?;
-		let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+		let result = cmd.output();
 
-		/*let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-		if !self.ui.quiet && !stderr.is_empty() {
-			self.ui.progress_manager.println(
-				if output.status.success() {
-					self.ui.format_info(stderr)
-				} else {
-					self.ui.format_err(stderr)
-				},
-			)?;
-		}*/
-
-		if !self.ui.quiet && !stdout.is_empty() {
-			self.ui.progress_manager.println(
-				if output.status.success() {
-					self.ui.format_warn(stdout)
-				} else {
-					self.ui.format_err(stdout)
-				},
-			)?;
-		}
-
-		if output.status.success() {
-			self.ui.progress_manager.println(self.ui.format_ok(format!(
-				"{} exited with {}",
+		if result.is_err() {
+			let err = result.err().unwrap();
+			Err(anyhow!(format!(
+				"Error trying to execute {}! {}",
 				cmd.get_program().to_str().unwrap(),
-				output.status
-			)))?;
-			Ok(output.status)
+				err
+			)))
 		} else {
-			self.ui
-				.progress_manager
-				.println(self.ui.format_err(format!(
-					"{} exited with {}",
-					cmd.get_program().to_str().unwrap(),
-					output.status
-				)))?;
-			Err(anyhow!(output.status))
+			let output = result.ok().unwrap();
+			let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+			if !self.ui.quiet && !stdout.is_empty() {
+				self.ui.progress_manager.println(
+					if output.status.success() {
+						self.ui.format_warn(stdout.clone())
+					} else {
+						self.ui.format_err(stdout.clone())
+					},
+				)?;
+			}
+
+			if output.status.success() {
+				self.ui.progress_manager.println(self.ui.format_ok(
+					format!(
+						"{} exited with {}",
+						cmd.get_program().to_str().unwrap(),
+						output.status
+					),
+				))?;
+				Ok(output.status)
+			} else {
+				self.ui.progress_manager.println(self.ui.format_err(
+					format!(
+						"{} exited with {}",
+						cmd.get_program().to_str().unwrap(),
+						output.status
+					),
+				))?;
+				Err(anyhow!(stdout))
+			}
 		}
 	}
 }
