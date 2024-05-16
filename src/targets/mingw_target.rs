@@ -322,6 +322,10 @@ impl TargetTrait for MINGWTarget
 				linker_args.push(format!("-l{lib}"))
 			}
 
+			for flag in self.compiler_flags.clone() {
+				linker_args.push(flag)
+			}
+
 			for flag in self.linker_flags.clone() {
 				linker_args.push("-Wl,".to_string() + &flag)
 			}

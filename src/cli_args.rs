@@ -119,6 +119,9 @@ pub struct ListArgs
 	)]
 	pub workdir: String,
 
+	#[arg(long, short, help = "Arguments to be passed to the script. Pass via 'ARGUMENT=VALUE'.")]
+	pub arguments: Option<Vec<String>>,
+	
 	#[arg(long, short, help = "Silence any numake output other than the list itself.")]
 	pub quiet: bool
 }

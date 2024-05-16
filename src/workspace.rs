@@ -8,13 +8,13 @@ use std::{
 
 use anyhow::anyhow;
 use mlua::{
+	Compiler,
+	FromLua,
+	Lua,
 	prelude::{
 		LuaError,
 		LuaValue,
 	},
-	Compiler,
-	FromLua,
-	Lua,
 	UserData,
 	UserDataFields,
 	UserDataMethods,
@@ -261,7 +261,7 @@ impl LuaWorkspace
 			toolset_linker: None,
 			output: None,
 
-			arguments: vec![],
+			arguments: args.arguments.clone().unwrap_or_default(),
 			ui: NumakeUI::new(args.quiet),
 			cache: Cache::new(workspace)?,
 		})
@@ -423,12 +423,11 @@ impl LuaWorkspace
 			} else {
 				let err = result.err().unwrap();
 				spinner.finish_with_message(self.ui.format_err(format!(
-					"Building target {} FAILED:",
+					"Building target {} FAILED!",
 					_target,
 				)));
 				Err(err)
 			}
-
 		}
 	}
 

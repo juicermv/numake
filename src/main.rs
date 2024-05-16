@@ -4,14 +4,7 @@
 	TODO: Optimization, Refactoring, Error Handling. THIS IS A WIP!
 */
 
-use std::io;
-
-use anyhow::anyhow;
 use clap::Parser;
-use console::{
-	style,
-	Emoji,
-};
 use mlua::Lua;
 
 use crate::{
@@ -64,27 +57,12 @@ fn run() -> anyhow::Result<()>
 #[cfg(not(test))]
 fn main() -> anyhow::Result<()>
 {
-	let result = run();
-	if result.is_err() {
-		let err = result.err().unwrap();
-		println!("{}", style(format!(
-			"{} {}",
-			Emoji("⛔", "ERROR!"),
-			err
-		))
-		.red()
-		.bold());
-		Err(err)
-	} else {
-		Ok(())
-	}
+	run()
 }
 
 #[cfg(test)]
 mod tests
 {
-	use std::env;
-
 	use mlua::Lua;
 
 	use crate::{
