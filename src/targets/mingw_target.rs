@@ -382,17 +382,12 @@ impl TargetTrait for MINGWTarget
 		} else {
 			let output = result.ok().unwrap();
 			let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-			if !self.ui.quiet && !stderr.is_empty() {
-				self.ui.progress_manager.println(
-					if output.status.success() {
-						self.ui.format_warn(stderr.clone())
-					} else {
-						self.ui.format_err(stderr.clone())
-					},
-				)?;
-			}
 
 			if output.status.success() {
+				self.ui
+					.progress_manager
+					.println(self.ui.format_warn(stderr.clone()))?;
+
 				self.ui.progress_manager.println(self.ui.format_ok(
 					format!(
 						"{} exited with {}",

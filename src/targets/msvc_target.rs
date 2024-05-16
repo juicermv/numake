@@ -474,17 +474,15 @@ impl TargetTrait for MSVCTarget
 			let output = result.ok().unwrap();
 			let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
-			if !self.ui.quiet && !stdout.is_empty() {
+			if output.status.success() {
 				self.ui.progress_manager.println(
-					if output.status.success() {
+					if stdout.contains(": warning ") {
 						self.ui.format_warn(stdout.clone())
 					} else {
-						self.ui.format_err(stdout.clone())
+						self.ui.format_ok(stdout.clone())
 					},
 				)?;
-			}
 
-			if output.status.success() {
 				self.ui.progress_manager.println(self.ui.format_ok(
 					format!(
 						"{} exited with {}",
