@@ -169,16 +169,16 @@ impl NumakeUI
 		msg: String,
 	) -> ProgressBar
 	{
-		let spinner = ProgressBar::new_spinner();
-		spinner.set_message(msg);
+		let spinner = ProgressBar::new_spinner().with_message(msg).with_style(
+			ProgressStyle::default_spinner().tick_strings(&[
+				&self.style_question.apply_to("/").to_string(),
+				&self.style_question.apply_to("—").to_string(),
+				&self.style_question.apply_to("\\").to_string(),
+				&self.style_question.apply_to("|").to_string(),
+				"-",
+			]),
+		);
 		spinner.enable_steady_tick(Duration::from_millis(115));
-		spinner.set_style(ProgressStyle::default_spinner().tick_strings(&[
-			&self.style_question.apply_to("/").to_string(),
-			&self.style_question.apply_to("—").to_string(),
-			&self.style_question.apply_to("\\").to_string(),
-			&self.style_question.apply_to("|").to_string(),
-			"-",
-		]));
 		spinner.set_draw_target(
 			if self.quiet {
 				ProgressDrawTarget::hidden()

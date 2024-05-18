@@ -89,8 +89,8 @@ impl UserData for LuaWorkspace
 
 		fields
 			.add_field_method_get("platform", |_, _| Ok(std::env::consts::OS));
-		
-		fields.add_field_method_get("arch", |_,_| Ok(std::env::consts::ARCH));
+
+		fields.add_field_method_get("arch", |_, _| Ok(std::env::consts::ARCH));
 	}
 
 	fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M)
@@ -415,11 +415,8 @@ impl LuaWorkspace
 			let spinner =
 				self.ui.spinner(format!("Building target {}...", _target));
 			let now = SystemTime::now();
-			let result = self
-				.targets
-				.get(_target)
-				.unwrap()
-				.build(&mut self.clone(), &spinner);
+			let result =
+				self.targets.get(_target).unwrap().build(&mut self.clone());
 			if result.is_ok() {
 				spinner.finish_with_message(self.ui.format_ok(format!(
 					"Building target {} done in {}ms!",

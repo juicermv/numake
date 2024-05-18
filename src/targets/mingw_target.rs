@@ -11,6 +11,7 @@ use std::{
 use anyhow::anyhow;
 use indicatif::ProgressBar;
 use mlua::{
+	prelude::LuaValue,
 	FromLua,
 	Lua,
 	Table,
@@ -18,7 +19,6 @@ use mlua::{
 	UserDataFields,
 	Value,
 };
-use mlua::prelude::LuaValue;
 use pathdiff::diff_paths;
 use serde::Serialize;
 
@@ -165,7 +165,6 @@ impl TargetTrait for MinGWTarget
 	fn build(
 		&self,
 		parent_workspace: &mut LuaWorkspace,
-		_: &ProgressBar,
 	) -> anyhow::Result<()>
 	{
 		let obj_dir: PathBuf = parent_workspace
@@ -389,9 +388,11 @@ impl TargetTrait for MinGWTarget
 			let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
 			if output.status.success() {
-				self.ui
-					.progress_manager
-					.println(self.ui.format_warn(stderr.clone()))?;
+				if !stderr.is_empty() {
+					self.ui
+						.progress_manager
+						.println(self.ui.format_warn(stderr.clone()))?;
+				}
 
 				self.ui.progress_manager.println(self.ui.format_ok(
 					format!(
@@ -700,4 +701,3 @@ impl<'lua> FromLua<'lua> for MinGWTarget
 		}
 	}
 }
-

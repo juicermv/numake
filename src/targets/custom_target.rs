@@ -51,12 +51,11 @@ impl TargetTrait for CustomTarget
 {
 	fn build(
 		&self,
-		parent_workspace: &mut LuaWorkspace,
-		progress: &ProgressBar,
+		parent_workspace: &mut LuaWorkspace
 	) -> anyhow::Result<()>
 	{
 		for target in self.sub_targets.clone() {
-			target.build(parent_workspace, progress)?;
+			target.build(parent_workspace)?;
 		}
 		Ok(())
 	}

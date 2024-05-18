@@ -124,8 +124,7 @@ impl TargetTrait for GenericTarget
 {
 	fn build(
 		&self,
-		parent_workspace: &mut LuaWorkspace,
-		_: &ProgressBar,
+		parent_workspace: &mut LuaWorkspace
 	) -> anyhow::Result<()>
 	{
 		let obj_dir: PathBuf = parent_workspace
@@ -271,9 +270,11 @@ impl TargetTrait for GenericTarget
 			let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
 			if output.status.success() {
-				self.ui
-					.progress_manager
-					.println(self.ui.format_warn(stderr.clone()))?;
+				if !stderr.is_empty() {
+					self.ui
+						.progress_manager
+						.println(self.ui.format_warn(stderr.clone()))?;
+				}
 
 				self.ui.progress_manager.println(self.ui.format_ok(
 					format!(

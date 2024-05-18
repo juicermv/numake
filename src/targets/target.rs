@@ -27,7 +27,6 @@ pub trait TargetTrait
 	fn build(
 		&self,
 		parent_workspace: &mut LuaWorkspace,
-		progress: &ProgressBar,
 	) -> anyhow::Result<()>;
 
 	fn execute(
@@ -63,14 +62,13 @@ impl TargetTrait for Target
 	fn build(
 		&self,
 		parent_workspace: &mut LuaWorkspace,
-		progress: &ProgressBar,
 	) -> anyhow::Result<()>
 	{
 		match self {
-			Target::Generic(target) => target.build(parent_workspace, progress),
-			Target::MSVC(target) => target.build(parent_workspace, progress),
-			Target::MinGW(target) => target.build(parent_workspace, progress),
-			Target::Custom(target) => target.build(parent_workspace, progress),
+			Target::Generic(target) => target.build(parent_workspace),
+			Target::MSVC(target) => target.build(parent_workspace),
+			Target::MinGW(target) => target.build(parent_workspace),
+			Target::Custom(target) => target.build(parent_workspace),
 		}
 	}
 

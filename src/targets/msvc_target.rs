@@ -251,8 +251,7 @@ impl TargetTrait for MSVCTarget
 	#[cfg(not(windows))]
 	fn build(
 		&self,
-		_: &mut LuaWorkspace,
-		_: &ProgressBar,
+		_: &mut LuaWorkspace
 	) -> anyhow::Result<()>
 	{
 		Err(anyhow!(&NUMAKE_ERROR.MSVC_WINDOWS_ONLY))
@@ -261,8 +260,7 @@ impl TargetTrait for MSVCTarget
 	#[cfg(windows)]
 	fn build(
 		&self,
-		parent_workspace: &mut LuaWorkspace,
-		_: &ProgressBar,
+		parent_workspace: &mut LuaWorkspace
 	) -> anyhow::Result<()>
 	{
 		let obj_dir: PathBuf = parent_workspace
