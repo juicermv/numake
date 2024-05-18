@@ -4,9 +4,7 @@ use std::{
 };
 
 use console::{
-	Emoji,
 	Style,
-	Term,
 };
 use dialoguer::{
 	Input,

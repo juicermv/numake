@@ -3,11 +3,9 @@ use std::{
 	fs,
 	io::Cursor,
 	path::PathBuf,
-	time::SystemTime,
 };
 
 use anyhow::anyhow;
-use console::pad_str;
 use mlua::{
 	prelude::{
 		LuaError,
