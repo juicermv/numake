@@ -6,11 +6,9 @@ use std::process::{
 use indicatif::ProgressBar;
 use mlua::{
 	prelude::{
-		LuaFunction,
 		LuaValue,
 	},
 	FromLua,
-	Function,
 	Lua,
 	UserData,
 	UserDataFields,
@@ -78,7 +76,7 @@ impl UserData for CustomTarget
 	{
 		fields.add_field_method_set(
 			"sub_targets",
-			|lua, this, targets: Vec<Target>| {
+			|_, this, targets: Vec<Target>| {
 				this.sub_targets = targets;
 				Ok(())
 			},

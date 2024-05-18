@@ -29,7 +29,6 @@ use crate::{
 	util::to_lua_result,
 	workspace::LuaWorkspace,
 };
-use crate::targets::custom_target::CustomTarget;
 
 #[derive(Clone, Serialize)]
 pub struct GenericTarget

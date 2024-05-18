@@ -136,7 +136,7 @@ mod tests
 		proj.process(&Lua::new())?;
 		proj.build()?;
 
-		let mut test_exec =
+		let test_exec =
 			std::process::Command::new(".numake/out/msvc/test.exe").output()?;
 		println!("{}", String::from_utf8_lossy(test_exec.stdout.as_slice()));
 		println!("{}", String::from_utf8_lossy(test_exec.stderr.as_slice()));

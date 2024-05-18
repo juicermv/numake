@@ -35,7 +35,6 @@ use crate::{
 	},
 	workspace::LuaWorkspace,
 };
-use crate::targets::custom_target::CustomTarget;
 
 #[derive(Clone, Serialize)]
 pub struct MSVCTarget

@@ -108,7 +108,7 @@ impl UserData for LuaWorkspace
 
 		methods.add_method(
 			"create_custom_target",
-			|_, this, (name, description): (String, String)| {
+			|_, _, (name, description): (String, String)| {
 				Ok(CustomTarget::new(name, description))
 			},
 		);
