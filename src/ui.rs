@@ -6,6 +6,7 @@ use std::{
 use console::{
 	Emoji,
 	Style,
+	Term,
 };
 use dialoguer::{
 	Input,
@@ -28,6 +29,8 @@ pub struct NumakeUI
 	style_err: Style,
 	style_warn: Style,
 	style_question: Style,
+	style_info: Style,
+	style_dim: Style,
 }
 
 impl NumakeUI
@@ -45,10 +48,12 @@ impl NumakeUI
 				},
 			),
 
-			style_ok: Style::new().green().bold(),
-			style_err: Style::new().red().bold(),
-			style_warn: Style::new().yellow().bold(),
+			style_ok: Style::new().green(),
+			style_err: Style::new().red(),
+			style_warn: Style::new().yellow(),
 			style_question: Style::new().cyan(),
+			style_info: Style::new().blue(),
+			style_dim: Style::new().dim(),
 		}
 	}
 
@@ -57,9 +62,11 @@ impl NumakeUI
 		val: String,
 	) -> String
 	{
-		self.style_ok
-			.apply_to(format!("{} {}", Emoji("✅", "OK!"), val))
-			.to_string()
+		format!(
+			"{}{}",
+			self.style_ok.apply_to("ok"),
+			self.style_dim.apply_to(": ".to_string() + &val)
+		)
 	}
 
 	pub fn print_ok(
@@ -80,7 +87,11 @@ impl NumakeUI
 	) -> String
 	{
 		self.style_warn
-			.apply_to(format!("{} {}", Emoji("⚠️", "WARNING!"), val))
+			.apply_to(format!(
+				"{}: {}",
+				self.style_warn.apply_to("warning"),
+				val
+			))
 			.to_string()
 	}
 
@@ -102,7 +113,7 @@ impl NumakeUI
 	) -> String
 	{
 		self.style_err
-			.apply_to(format!("{} {}", Emoji("⛔", "ERROR!"), val))
+			.apply_to(format!("{}: {}", self.style_err.apply_to("error"), val))
 			.to_string()
 	}
 
@@ -123,7 +134,7 @@ impl NumakeUI
 		val: String,
 	) -> String
 	{
-		format!("{} {}", Emoji("ℹ️", "INFO:"), val)
+		format!("{}: {}", self.style_info.apply_to("info"), val)
 	}
 
 	pub fn print_info(
@@ -144,7 +155,11 @@ impl NumakeUI
 	) -> String
 	{
 		self.style_question
-			.apply_to(format!("{} {}", Emoji("❔", "?"), val))
+			.apply_to(format!(
+				"{}: {}",
+				self.style_question.apply_to("question"),
+				val
+			))
 			.to_string()
 	}
 
@@ -154,13 +169,6 @@ impl NumakeUI
 	) -> ProgressBar
 	{
 		let bar = ProgressBar::new(length);
-		bar.set_draw_target(
-			if self.quiet {
-				ProgressDrawTarget::hidden()
-			} else {
-				ProgressDrawTarget::stdout()
-			},
-		);
 		self.progress_manager.add(bar)
 	}
 
@@ -170,22 +178,18 @@ impl NumakeUI
 	) -> ProgressBar
 	{
 		let spinner = ProgressBar::new_spinner().with_message(msg).with_style(
-			ProgressStyle::default_spinner().tick_strings(&[
-				&self.style_question.apply_to("/").to_string(),
-				&self.style_question.apply_to("—").to_string(),
-				&self.style_question.apply_to("\\").to_string(),
-				&self.style_question.apply_to("|").to_string(),
-				"-",
-			]),
+			ProgressStyle::default_spinner()
+				.template("{spinner} {wide_msg} {elapsed_precise}")
+				.unwrap()
+				.tick_strings(&[
+					&self.style_question.apply_to("/").to_string(),
+					&self.style_question.apply_to("—").to_string(),
+					&self.style_question.apply_to("\\").to_string(),
+					&self.style_question.apply_to("|").to_string(),
+					"-",
+				]),
 		);
 		spinner.enable_steady_tick(Duration::from_millis(115));
-		spinner.set_draw_target(
-			if self.quiet {
-				ProgressDrawTarget::hidden()
-			} else {
-				ProgressDrawTarget::stdout()
-			},
-		);
 		self.progress_manager.add(spinner)
 	}
 

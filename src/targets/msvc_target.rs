@@ -11,7 +11,6 @@ use std::{
 };
 
 use anyhow::anyhow;
-use indicatif::ProgressBar;
 use mlua::{
 	FromLua,
 	Lua,

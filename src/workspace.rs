@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::anyhow;
+use console::pad_str;
 use mlua::{
 	prelude::{
 		LuaError,
@@ -277,7 +278,6 @@ impl LuaWorkspace
 	) -> anyhow::Result<()>
 	{
 		let spinner = self.ui.spinner("Processing script...".to_string());
-		let now = SystemTime::now();
 		std::env::set_current_dir(&self.working_directory)?;
 
 		lua_state.set_compiler(
@@ -358,11 +358,12 @@ impl LuaWorkspace
 
 		// Write cache to disk
 		self.cache.flush()?;
-		
-		spinner.finish_with_message(self.ui.format_ok(format!(
+
+		spinner.finish();
+		self.ui.progress_manager.println(self.ui.format_ok(format!(
 			"Processing script done in {}ms!",
-			now.elapsed()?.as_millis()
-		)));
+			spinner.elapsed().as_millis()
+		)))?;
 
 		Ok(())
 	}
@@ -414,22 +415,24 @@ impl LuaWorkspace
 		} else {
 			let spinner =
 				self.ui.spinner(format!("Building target {}...", _target));
-			let now = SystemTime::now();
 			let result =
 				self.targets.get(_target).unwrap().build(&mut self.clone());
 			if result.is_ok() {
-				spinner.finish_with_message(self.ui.format_ok(format!(
-					"Building target {} done in {}ms!",
-					_target,
-					now.elapsed()?.as_millis()
-				)));
+				spinner.finish();
+				self.ui.progress_manager.println(self.ui.format_ok(
+					format!(
+						"Building target {} done in {}ms!",
+						_target,
+						spinner.elapsed().as_millis()
+					),
+				))?;
 				Ok(())
 			} else {
 				let err = result.err().unwrap();
-				spinner.finish_with_message(self.ui.format_err(format!(
-					"Building target {} FAILED!",
-					_target,
-				)));
+				spinner.finish();
+				self.ui.progress_manager.println(self.ui.format_err(
+					format!("Building target {} FAILED!", _target,),
+				))?;
 				Err(err)
 			}
 		}
@@ -551,9 +554,10 @@ impl LuaWorkspace
 
 				ZipArchive::new(Cursor::new(response.bytes()?))?
 					.extract(&path)?;
-				spinner.finish_with_message(
+				spinner.finish();
+				self.ui.progress_manager.println(
 					self.ui.format_ok(format!("Done extracting! [{}]", url)),
-				);
+				)?;
 
 				Ok(path.to_str().unwrap().to_string())
 			} else {

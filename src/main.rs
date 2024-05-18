@@ -5,6 +5,7 @@
 */
 
 use clap::Parser;
+use console::Term;
 use mlua::Lua;
 
 use crate::{
@@ -30,11 +31,13 @@ fn run() -> anyhow::Result<()>
 	lua.enable_jit(true);
 	lua.sandbox(true)?;
 
+	Term::stdout().hide_cursor()?;
 	match &cli.command {
 		SubCommands::Build(args) => {
 			let mut proj = LuaWorkspace::new(args)?;
 			proj.process(&lua)?;
 			proj.build()?;
+			
 		}
 
 		SubCommands::Inspect(args) => {
@@ -50,6 +53,7 @@ fn run() -> anyhow::Result<()>
 			println!("\nAvailable targets: {}", proj.list_targets()?);
 		}
 	}
+	Term::stdout().show_cursor()?;
 
 	Ok(())
 }

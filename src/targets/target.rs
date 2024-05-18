@@ -3,7 +3,6 @@ use std::process::{
 	ExitStatus,
 };
 
-use indicatif::ProgressBar;
 use mlua::{
 	FromLua,
 	IntoLua,
