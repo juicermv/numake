@@ -394,7 +394,7 @@ impl LuaWorkspace
 	pub fn build(&mut self) -> anyhow::Result<()>
 	{
 		let mut result = Ok(());
-		if self.target == "all" || self.target == "*" {
+		if self.target == "all" || self.target == "." {
 			for (target, _) in self.targets.clone().iter() {
 				self.build_target(target)?;
 			}
