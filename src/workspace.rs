@@ -375,16 +375,16 @@ impl LuaWorkspace
 			.map(|(name, target)| {
 				match target {
 					Target::Generic(_) => {
-						format!("\t{} [GENERIC]\n", name)
+						format!("\n\t{} [GENERIC]", name)
 					}
 					Target::MSVC(_) => {
-						format!("\t{} [MSVC]\n", name)
+						format!("\n\t{} [MSVC]", name)
 					}
 					Target::MinGW(_) => {
-						format!("\t{} [MINGW]\n", name)
+						format!("\n\t{} [MINGW]", name)
 					}
 					Target::Custom(target) => {
-						format!("\t{} [CUSTOM]\n{}\n", name, target.description)
+						format!("\n\t{} [CUSTOM]\n{}", name, target.description)
 					}
 				}
 			})
