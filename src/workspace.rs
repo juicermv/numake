@@ -358,7 +358,7 @@ impl LuaWorkspace
 
 		// Write cache to disk
 		self.cache.flush()?;
-
+		
 		spinner.finish_with_message(self.ui.format_ok(format!(
 			"Processing script done in {}ms!",
 			now.elapsed()?.as_millis()
@@ -395,8 +395,8 @@ impl LuaWorkspace
 	{
 		let mut result = Ok(());
 		if self.target == "all" || self.target == "." {
-			for (target, _) in self.targets.clone().iter() {
-				self.build_target(target)?;
+			for (target, _) in self.targets.clone() {
+				self.build_target(&target)?;
 			}
 		} else {
 			result = self.build_target(&self.target.clone());
