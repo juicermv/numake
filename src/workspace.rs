@@ -8,13 +8,13 @@ use std::{
 
 use anyhow::anyhow;
 use mlua::{
-	Compiler,
-	FromLua,
-	Lua,
 	prelude::{
 		LuaError,
 		LuaValue,
 	},
+	Compiler,
+	FromLua,
+	Lua,
 	UserData,
 	UserDataFields,
 	UserDataMethods,
@@ -32,8 +32,9 @@ use crate::{
 	},
 	error::NUMAKE_ERROR,
 	targets::{
+		custom_target::CustomTarget,
 		generic_target::GenericTarget,
-		mingw_target::MINGWTarget,
+		mingw_target::MinGWTarget,
 		msvc_target::MSVCTarget,
 		target::{
 			Target,
@@ -88,6 +89,8 @@ impl UserData for LuaWorkspace
 
 		fields
 			.add_field_method_get("platform", |_, _| Ok(std::env::consts::OS));
+		
+		fields.add_field_method_get("arch", |_,_| Ok(std::env::consts::ARCH));
 	}
 
 	fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M)
@@ -103,6 +106,13 @@ impl UserData for LuaWorkspace
 			))
 		});
 
+		methods.add_method(
+			"create_custom_target",
+			|_, this, (name, description): (String, String)| {
+				Ok(CustomTarget::new(name, description))
+			},
+		);
+
 		methods.add_method("create_msvc_target", |_, this, name: String| {
 			to_lua_result(MSVCTarget::new(
 				name,
@@ -113,7 +123,7 @@ impl UserData for LuaWorkspace
 		});
 
 		methods.add_method("create_mingw_target", |_, this, name: String| {
-			to_lua_result(MINGWTarget::new(
+			to_lua_result(MinGWTarget::new(
 				name,
 				this.output.clone(),
 				this.working_directory.clone(),
@@ -178,12 +188,6 @@ impl UserData for LuaWorkspace
 				Ok(paths_str.clone())
 			},
 		);
-
-		/*methods.add_method("query", |_, this, prompt: String| {
-			Ok(this.ui.progress_manager.suspend(move || -> String {
-				this.ui.input(this.ui.format_question(prompt))
-			}))
-		});*/
 	}
 }
 
@@ -371,13 +375,16 @@ impl LuaWorkspace
 			.map(|(name, target)| {
 				match target {
 					Target::Generic(_) => {
-						format!("{} [GENERIC], ", name)
+						format!("\t{} [GENERIC]\n", name)
 					}
 					Target::MSVC(_) => {
-						format!("{} [MSVC], ", name)
+						format!("\t{} [MSVC]\n", name)
 					}
-					Target::MINGW(_) => {
-						format!("{} [MINGW], ", name)
+					Target::MinGW(_) => {
+						format!("\t{} [MINGW]\n", name)
+					}
+					Target::Custom(target) => {
+						format!("\t{} [CUSTOM]\n{}\n", name, target.description)
 					}
 				}
 			})
@@ -603,15 +610,20 @@ impl LuaWorkspace
 impl<'lua> FromLua<'lua> for LuaWorkspace
 {
 	fn from_lua(
-		value: Value<'lua>,
+		value: LuaValue<'lua>,
 		_: &'lua Lua,
 	) -> mlua::Result<Self>
 	{
 		match value {
 			Value::UserData(user_data) => {
-				Ok(user_data.borrow::<Self>()?.clone())
+				if user_data.is::<Self>() {
+					Ok(user_data.borrow::<Self>()?.clone())
+				} else {
+					Err(mlua::Error::UserDataTypeMismatch)
+				}
 			}
-			_ => unreachable!(),
+
+			_ => Err(mlua::Error::UserDataTypeMismatch),
 		}
 	}
 }

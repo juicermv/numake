@@ -18,6 +18,7 @@ use mlua::{
 	UserDataFields,
 	Value,
 };
+use mlua::prelude::LuaValue;
 use pathdiff::diff_paths;
 use serde::Serialize;
 
@@ -28,9 +29,10 @@ use crate::{
 	util::to_lua_result,
 	workspace::LuaWorkspace,
 };
+use crate::targets::custom_target::CustomTarget;
 
 #[derive(Clone, Serialize)]
-pub struct MINGWTarget
+pub struct MinGWTarget
 {
 	pub compiler_flags: Vec<String>,
 	pub linker_flags: Vec<String>,
@@ -59,7 +61,7 @@ pub struct MINGWTarget
 	lang: String,
 }
 
-impl MINGWTarget
+impl MinGWTarget
 {
 	pub fn new(
 		name: String,
@@ -68,7 +70,7 @@ impl MINGWTarget
 		ui: NumakeUI,
 	) -> anyhow::Result<Self>
 	{
-		Ok(MINGWTarget {
+		Ok(MinGWTarget {
 			compiler_flags: Vec::new(),
 			linker_flags: Vec::new(),
 			include_paths: Vec::new(),
@@ -159,7 +161,7 @@ impl MINGWTarget
 	}
 }
 
-impl TargetTrait for MINGWTarget
+impl TargetTrait for MinGWTarget
 {
 	fn build(
 		&self,
@@ -414,7 +416,7 @@ impl TargetTrait for MINGWTarget
 	}
 }
 
-impl UserData for MINGWTarget
+impl UserData for MinGWTarget
 {
 	fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F)
 	{
@@ -679,18 +681,24 @@ impl UserData for MINGWTarget
 	}
 }
 
-impl<'lua> FromLua<'lua> for MINGWTarget
+impl<'lua> FromLua<'lua> for MinGWTarget
 {
 	fn from_lua(
-		value: Value<'lua>,
+		value: LuaValue<'lua>,
 		_: &'lua Lua,
 	) -> mlua::Result<Self>
 	{
 		match value {
 			Value::UserData(user_data) => {
-				Ok(user_data.borrow::<Self>()?.clone())
+				if user_data.is::<Self>() {
+					Ok(user_data.borrow::<Self>()?.clone())
+				} else {
+					Err(mlua::Error::UserDataTypeMismatch)
+				}
 			}
-			_ => unreachable!(),
+
+			_ => Err(mlua::Error::UserDataTypeMismatch),
 		}
 	}
 }
+

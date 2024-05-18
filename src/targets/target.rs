@@ -14,8 +14,9 @@ use serde::Serialize;
 
 use crate::{
 	targets::{
+		custom_target::CustomTarget,
 		generic_target::GenericTarget,
-		mingw_target::MINGWTarget,
+		mingw_target::MinGWTarget,
 		msvc_target::MSVCTarget,
 	},
 	workspace::LuaWorkspace,
@@ -40,7 +41,8 @@ pub enum Target
 {
 	Generic(GenericTarget),
 	MSVC(MSVCTarget),
-	MINGW(MINGWTarget),
+	MinGW(MinGWTarget),
+	Custom(CustomTarget),
 }
 
 impl Target
@@ -50,7 +52,8 @@ impl Target
 		match self {
 			Target::Generic(target) => target.name.clone(),
 			Target::MSVC(target) => target.name.clone(),
-			Target::MINGW(target) => target.name.clone(),
+			Target::MinGW(target) => target.name.clone(),
+			Target::Custom(target) => target.name.clone(),
 		}
 	}
 }
@@ -66,7 +69,8 @@ impl TargetTrait for Target
 		match self {
 			Target::Generic(target) => target.build(parent_workspace, progress),
 			Target::MSVC(target) => target.build(parent_workspace, progress),
-			Target::MINGW(target) => target.build(parent_workspace, progress),
+			Target::MinGW(target) => target.build(parent_workspace, progress),
+			Target::Custom(target) => target.build(parent_workspace, progress),
 		}
 	}
 
@@ -78,7 +82,8 @@ impl TargetTrait for Target
 		match self {
 			Target::Generic(target) => target.execute(cmd),
 			Target::MSVC(target) => target.execute(cmd),
-			Target::MINGW(target) => target.execute(cmd),
+			Target::MinGW(target) => target.execute(cmd),
+			Target::Custom(target) => target.execute(cmd),
 		}
 	}
 }
@@ -93,7 +98,8 @@ impl<'lua> IntoLua<'lua> for Target
 		match self {
 			Target::Generic(target) => target.into_lua(lua),
 			Target::MSVC(target) => target.into_lua(lua),
-			Target::MINGW(target) => target.into_lua(lua),
+			Target::MinGW(target) => target.into_lua(lua),
+			Target::Custom(target) => target.into_lua(lua),
 		}
 	}
 }
@@ -113,16 +119,18 @@ impl<'lua> FromLua<'lua> for Target
 					Ok(Self::Generic(
 						user_data.borrow::<GenericTarget>()?.clone(),
 					))
-				} else if user_data.is::<MINGWTarget>() {
-					Ok(Self::MINGW(user_data.borrow::<MINGWTarget>()?.clone()))
-				} else {
-					Err(mlua::Error::runtime(
-						"Tried to convert invalid target type to Target!",
+				} else if user_data.is::<MinGWTarget>() {
+					Ok(Self::MinGW(user_data.borrow::<MinGWTarget>()?.clone()))
+				} else if user_data.is::<CustomTarget>() {
+					Ok(Self::Custom(
+						user_data.borrow::<CustomTarget>()?.clone(),
 					))
+				} else {
+					Err(mlua::Error::UserDataTypeMismatch)
 				}
 			}
 
-			_ => unreachable!(),
+			_ => Err(mlua::Error::UserDataTypeMismatch),
 		}
 	}
 }

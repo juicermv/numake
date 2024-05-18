@@ -18,6 +18,7 @@ use mlua::{
 	UserDataFields,
 	Value,
 };
+use mlua::prelude::LuaValue;
 use pathdiff::diff_paths;
 use serde::Serialize;
 
@@ -28,6 +29,7 @@ use crate::{
 	util::to_lua_result,
 	workspace::LuaWorkspace,
 };
+use crate::targets::custom_target::CustomTarget;
 
 #[derive(Clone, Serialize)]
 pub struct GenericTarget
@@ -492,15 +494,21 @@ impl UserData for GenericTarget
 impl<'lua> FromLua<'lua> for GenericTarget
 {
 	fn from_lua(
-		value: Value<'lua>,
+		value: LuaValue<'lua>,
 		_: &'lua Lua,
 	) -> mlua::Result<Self>
 	{
 		match value {
 			Value::UserData(user_data) => {
-				Ok(user_data.borrow::<Self>()?.clone())
+				if user_data.is::<Self>() {
+					Ok(user_data.borrow::<Self>()?.clone())
+				} else {
+					Err(mlua::Error::UserDataTypeMismatch)
+				}
 			}
-			_ => unreachable!(),
+
+			_ => Err(mlua::Error::UserDataTypeMismatch),
 		}
 	}
 }
+
