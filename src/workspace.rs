@@ -358,8 +358,8 @@ impl LuaWorkspace
 		self.cache.flush()?;
 
 		spinner.finish();
-		self.ui.progress_manager.println(self.ui.format_ok(format!(
-			"Processing script done in {}ms!",
+		self.ui.progress_manager.println(self.ui.format_info(format!(
+			"Processing script done in {}ms.",
 			spinner.elapsed().as_millis()
 		)))?;
 
@@ -417,9 +417,9 @@ impl LuaWorkspace
 				self.targets.get(_target).unwrap().build(&mut self.clone());
 			if result.is_ok() {
 				spinner.finish();
-				self.ui.progress_manager.println(self.ui.format_ok(
+				self.ui.progress_manager.println(self.ui.format_info(
 					format!(
-						"Building target {} done in {}ms!",
+						"Building target {} done in {}ms.",
 						_target,
 						spinner.elapsed().as_millis()
 					),

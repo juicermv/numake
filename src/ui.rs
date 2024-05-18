@@ -50,7 +50,7 @@ impl NumakeUI
 			style_err: Style::new().red(),
 			style_warn: Style::new().yellow(),
 			style_question: Style::new().cyan(),
-			style_info: Style::new().blue(),
+			style_info: Style::new().magenta(),
 			style_dim: Style::new().dim(),
 		}
 	}
