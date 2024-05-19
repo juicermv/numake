@@ -30,8 +30,7 @@ fn run() -> anyhow::Result<()>
 	let lua = Lua::new();
 	lua.enable_jit(true);
 	lua.sandbox(true)?;
-
-	Term::stdout().hide_cursor()?;
+	
 	match &cli.command {
 		SubCommands::Build(args) => {
 			let mut proj = LuaWorkspace::new(args)?;
@@ -53,7 +52,6 @@ fn run() -> anyhow::Result<()>
 			println!("\nAvailable targets: {}", proj.list_targets()?);
 		}
 	}
-	Term::stdout().show_cursor()?;
 
 	Ok(())
 }
@@ -61,7 +59,8 @@ fn run() -> anyhow::Result<()>
 #[cfg(not(test))]
 fn main() -> anyhow::Result<()>
 {
-	run()
+	let result = run();
+	result
 }
 
 #[cfg(test)]
