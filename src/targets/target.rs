@@ -9,7 +9,10 @@ use mlua::{
 	Lua,
 	Value,
 };
-use serde::Serialize;
+use serde::{
+	Serialize,
+	Serializer,
+};
 
 use crate::{
 	targets::{
@@ -34,7 +37,7 @@ pub trait TargetTrait
 	) -> anyhow::Result<ExitStatus>;
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
 pub enum Target
 {
 	Generic(GenericTarget),
@@ -52,6 +55,24 @@ impl Target
 			Target::MSVC(target) => target.name.clone(),
 			Target::MinGW(target) => target.name.clone(),
 			Target::Custom(target) => target.name.clone(),
+		}
+	}
+}
+
+impl Serialize for Target
+{
+	fn serialize<S>(
+		&self,
+		serializer: S,
+	) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		match self {
+			Target::MinGW(target) => target.serialize(serializer),
+			Target::MSVC(target) => target.serialize(serializer),
+			Target::Generic(target) => target.serialize(serializer),
+			Target::Custom(target) => target.serialize(serializer),
 		}
 	}
 }
