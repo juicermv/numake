@@ -354,14 +354,21 @@ impl LuaWorkspace
 		self.ui.progress_manager = lua_workspace.ui.progress_manager;
 		self.cache.user_values = lua_workspace.cache.user_values;
 
+		for name in self.targets.clone().keys() {
+			let mut target = self.targets[name].clone();
+			target.set_vscode_props();
+			self.targets.insert(name.clone(), target);
+		}
 		// Write cache to disk
 		self.cache.flush()?;
 
 		spinner.finish();
-		self.ui.progress_manager.println(self.ui.format_info(format!(
-			"Processing script done in {}ms.",
-			spinner.elapsed().as_millis()
-		)))?;
+		self.ui
+			.progress_manager
+			.println(self.ui.format_info(format!(
+				"Processing script done in {}ms.",
+				spinner.elapsed().as_millis()
+			)))?;
 
 		Ok(())
 	}

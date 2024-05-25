@@ -12,6 +12,7 @@ use std::{
 
 use anyhow::anyhow;
 use mlua::{
+	prelude::LuaValue,
 	FromLua,
 	Lua,
 	Table,
@@ -19,14 +20,16 @@ use mlua::{
 	UserDataFields,
 	Value,
 };
-use mlua::prelude::LuaValue;
 use pathdiff::diff_paths;
 use serde::Serialize;
 use tempfile::tempdir;
 
 use crate::{
 	error::NUMAKE_ERROR,
-	targets::target::TargetTrait,
+	targets::target::{
+		TargetTrait,
+		VSCodeProperties,
+	},
 	ui::NumakeUI,
 	util::{
 		download_vswhere,
@@ -53,6 +56,7 @@ pub struct MSVCTarget
 	pub name: String,
 
 	workdir: PathBuf,
+	vscode_properties: VSCodeProperties,
 
 	#[serde(skip_serializing)]
 	ui: NumakeUI,
@@ -91,6 +95,7 @@ impl MSVCTarget
 			rc_flags: Vec::new(),
 			static_lib: false,
 			name,
+			vscode_properties: VSCodeProperties::default(),
 		})
 	}
 
@@ -193,7 +198,7 @@ impl MSVCTarget
 				.stdout
 				.as_slice(),
 		)
-			.to_string();
+		.to_string();
 
 		let vswhere_json: Vec<String> = serde_json::from_str(&vswhere_output)?;
 
@@ -250,7 +255,7 @@ impl TargetTrait for MSVCTarget
 	#[cfg(not(windows))]
 	fn build(
 		&self,
-		_: &mut LuaWorkspace
+		_: &mut LuaWorkspace,
 	) -> anyhow::Result<()>
 	{
 		Err(anyhow!(&NUMAKE_ERROR.MSVC_WINDOWS_ONLY))
@@ -259,7 +264,7 @@ impl TargetTrait for MSVCTarget
 	#[cfg(windows)]
 	fn build(
 		&self,
-		parent_workspace: &mut LuaWorkspace
+		parent_workspace: &mut LuaWorkspace,
 	) -> anyhow::Result<()>
 	{
 		let obj_dir: PathBuf = parent_workspace
@@ -500,6 +505,17 @@ impl TargetTrait for MSVCTarget
 				Err(anyhow!(stdout))
 			}
 		}
+	}
+
+	fn set_vscode_props(&mut self) -> VSCodeProperties
+	{
+		self.vscode_properties = VSCodeProperties {
+			compiler_path: "".to_string(),
+			default_includes: vec![],
+			intellisense_mode: "".to_string(),
+		};
+
+		self.vscode_properties.clone()
 	}
 }
 

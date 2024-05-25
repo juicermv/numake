@@ -4,9 +4,7 @@ use std::process::{
 };
 
 use mlua::{
-	prelude::{
-		LuaValue,
-	},
+	prelude::LuaValue,
 	FromLua,
 	Lua,
 	UserData,
@@ -19,6 +17,7 @@ use crate::{
 	targets::target::{
 		Target,
 		TargetTrait,
+		VSCodeProperties,
 	},
 	workspace::LuaWorkspace,
 };
@@ -50,7 +49,7 @@ impl TargetTrait for CustomTarget
 {
 	fn build(
 		&self,
-		parent_workspace: &mut LuaWorkspace
+		parent_workspace: &mut LuaWorkspace,
 	) -> anyhow::Result<()>
 	{
 		for target in self.sub_targets.clone() {
@@ -65,6 +64,15 @@ impl TargetTrait for CustomTarget
 	) -> anyhow::Result<ExitStatus>
 	{
 		Ok(ExitStatus::default())
+	}
+
+	fn set_vscode_props(&mut self) -> VSCodeProperties
+	{
+		VSCodeProperties {
+			compiler_path: "custom".to_string(),
+			default_includes: Vec::default(),
+			intellisense_mode: "".to_string(),
+		}
 	}
 }
 

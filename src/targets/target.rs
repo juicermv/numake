@@ -24,6 +24,14 @@ use crate::{
 	workspace::LuaWorkspace,
 };
 
+#[derive(Serialize, Clone, Default)]
+pub struct VSCodeProperties
+{
+	pub compiler_path: String,
+	pub default_includes: Vec<String>,
+	pub intellisense_mode: String,
+}
+
 pub trait TargetTrait
 {
 	fn build(
@@ -35,6 +43,8 @@ pub trait TargetTrait
 		&self,
 		cmd: &mut Command,
 	) -> anyhow::Result<ExitStatus>;
+
+	fn set_vscode_props(&mut self) -> VSCodeProperties;
 }
 
 #[derive(Clone)]
@@ -102,6 +112,16 @@ impl TargetTrait for Target
 			Target::MSVC(target) => target.execute(cmd),
 			Target::MinGW(target) => target.execute(cmd),
 			Target::Custom(target) => target.execute(cmd),
+		}
+	}
+
+	fn set_vscode_props(&mut self) -> VSCodeProperties
+	{
+		match self {
+			Target::Generic(target) => target.set_vscode_props(),
+			Target::MSVC(target) => target.set_vscode_props(),
+			Target::MinGW(target) => target.set_vscode_props(),
+			Target::Custom(target) => target.set_vscode_props(),
 		}
 	}
 }

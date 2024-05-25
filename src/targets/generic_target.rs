@@ -1,5 +1,6 @@
 use std::{
 	collections::HashMap,
+	env,
 	fs,
 	path::PathBuf,
 	process::{
@@ -10,6 +11,7 @@ use std::{
 
 use anyhow::anyhow;
 use mlua::{
+	prelude::LuaValue,
 	FromLua,
 	Lua,
 	Table,
@@ -17,15 +19,21 @@ use mlua::{
 	UserDataFields,
 	Value,
 };
-use mlua::prelude::LuaValue;
 use pathdiff::diff_paths;
 use serde::Serialize;
+use which::which;
 
 use crate::{
 	error::NUMAKE_ERROR,
-	targets::target::TargetTrait,
+	targets::target::{
+		TargetTrait,
+		VSCodeProperties,
+	},
 	ui::NumakeUI,
-	util::to_lua_result,
+	util::{
+		get_gcc_includes,
+		to_lua_result,
+	},
 	workspace::LuaWorkspace,
 };
 
@@ -50,6 +58,7 @@ pub struct GenericTarget
 	pub name: String,
 
 	workdir: PathBuf,
+	vscode_properties: VSCodeProperties,
 
 	#[serde(skip_serializing)]
 	ui: NumakeUI,
@@ -81,6 +90,7 @@ impl GenericTarget
 			workdir,
 			ui,
 			name,
+			vscode_properties: VSCodeProperties::default(),
 		})
 	}
 
@@ -123,7 +133,7 @@ impl TargetTrait for GenericTarget
 {
 	fn build(
 		&self,
-		parent_workspace: &mut LuaWorkspace
+		parent_workspace: &mut LuaWorkspace,
 	) -> anyhow::Result<()>
 	{
 		let obj_dir: PathBuf = parent_workspace
@@ -294,6 +304,28 @@ impl TargetTrait for GenericTarget
 				Err(anyhow!(stderr))
 			}
 		}
+	}
+
+	fn set_vscode_props(&mut self) -> VSCodeProperties
+	{
+		self.vscode_properties = VSCodeProperties {
+			compiler_path: which(self.toolset_compiler.clone().unwrap())
+				.unwrap()
+				.to_str()
+				.unwrap()
+				.to_string(),
+			default_includes: get_gcc_includes(
+				self.toolset_compiler.clone().unwrap(),
+			),
+			intellisense_mode: format!(
+				"{}-{}-{}",
+				env::consts::OS,
+				self.toolset_compiler.clone().unwrap(),
+				env::consts::ARCH.replace("x86_64", "x64")
+			),
+		};
+
+		self.vscode_properties.clone()
 	}
 }
 
@@ -510,4 +542,3 @@ impl<'lua> FromLua<'lua> for GenericTarget
 		}
 	}
 }
-

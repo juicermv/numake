@@ -1,8 +1,8 @@
 use std::{
 	collections::HashMap,
 	fs,
-	path::Path
-	,
+	path::Path,
+	process::Command,
 };
 
 use anyhow::anyhow;
@@ -125,17 +125,12 @@ pub fn args_to_map(args: Vec<String>) -> HashMap<String, Option<String>>
 			.collect::<Vec<String>>();
 
 		if split_arg.len() == 2 {
-			output.insert(
-				split_arg[0].clone(),
-				Some(
-					split_arg[1].clone()
-				),
-			);
+			output.insert(split_arg[0].clone(), Some(split_arg[1].clone()));
 		} else if split_arg.len() > 1 {
 			output.insert(
 				split_arg[0].clone(),
 				Some(
-					split_arg[1..]
+					split_arg[1 ..]
 						.iter()
 						.map(|val| val.clone() + "=")
 						.collect::<String>(),
@@ -147,4 +142,51 @@ pub fn args_to_map(args: Vec<String>) -> HashMap<String, Option<String>>
 	}
 
 	output
+}
+
+pub fn get_gcc_includes(cmd: String) -> Vec<String>
+{
+	let result = Command::new(&cmd).args(["-E", "-v", "-"]).output();
+	if result.is_ok() {
+		let mut return_vec: Vec<String> = Vec::new();
+		let mut output =
+			String::from_utf8_lossy(result.ok().unwrap().stderr.as_slice())
+				.to_string();
+		output = output
+			.split("#include <...> search starts here:")
+			.collect::<Vec<&str>>()[1]
+			.to_string();
+		output = output.split("End of search list.").collect::<Vec<&str>>()[0]
+			.to_string();
+		for line in output.lines() {
+			if line.is_empty() {
+				continue;
+			}
+
+			if line.ends_with(" (framework directory)") {
+				// MacOS specific
+				return_vec.push(
+					dunce::canonicalize(
+						line.replace(" (framework directory)", "")
+							.replace(" /", "/"),
+					)
+					.unwrap()
+					.to_str()
+					.unwrap()
+					.to_string(),
+				);
+			} else {
+				return_vec.push(
+					dunce::canonicalize(line.to_string().replace(" /", "/"))
+						.unwrap()
+						.to_str()
+						.unwrap()
+						.to_string(),
+				);
+			}
+		}
+		return_vec
+	} else {
+		Vec::default()
+	}
 }

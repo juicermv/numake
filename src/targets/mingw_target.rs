@@ -20,12 +20,19 @@ use mlua::{
 };
 use pathdiff::diff_paths;
 use serde::Serialize;
+use which::which;
 
 use crate::{
 	error::NUMAKE_ERROR,
-	targets::target::TargetTrait,
+	targets::target::{
+		TargetTrait,
+		VSCodeProperties,
+	},
 	ui::NumakeUI,
-	util::to_lua_result,
+	util::{
+		get_gcc_includes,
+		to_lua_result,
+	},
 	workspace::LuaWorkspace,
 };
 
@@ -47,6 +54,7 @@ pub struct MinGWTarget
 	pub name: String,
 
 	workdir: PathBuf,
+	vscode_properties: VSCodeProperties,
 
 	#[serde(skip_serializing)]
 	ui: NumakeUI,
@@ -87,6 +95,7 @@ impl MinGWTarget
 			static_lib: false,
 			name,
 			lang: "C++".to_string(),
+			vscode_properties: VSCodeProperties::default(),
 		})
 	}
 
@@ -412,6 +421,49 @@ impl TargetTrait for MinGWTarget
 				Err(anyhow!(stderr))
 			}
 		}
+	}
+
+	fn set_vscode_props(&mut self) -> VSCodeProperties
+	{
+		self.vscode_properties = VSCodeProperties {
+			compiler_path: which(format!(
+				"{}-w64-mingw32-{}",
+				self.arch.clone().unwrap_or("x86_64".to_string()),
+				if self.lang.to_lowercase() == "c++" {
+					"g++"
+				} else {
+					"gcc"
+				}
+			))
+			.unwrap_or_default()
+			.to_str()
+			.unwrap()
+			.to_string(),
+
+			default_includes: get_gcc_includes(format!(
+				"{}-w64-mingw32-{}",
+				self.arch.clone().unwrap_or("x86_64".to_string()),
+				if self.lang.to_lowercase() == "c++" {
+					"g++"
+				} else {
+					"gcc"
+				}
+			)),
+
+			intellisense_mode: format!(
+				"{}-gcc-{}",
+				std::env::consts::OS,
+				if self.arch == Some("i686".to_string()) {
+					"x86".to_string()
+				} else if self.arch == Some("x86_64".to_string()) {
+					"x64".to_string()
+				} else {
+					self.arch.clone().unwrap_or("${default}".into())
+				}
+			),
+		};
+
+		self.vscode_properties.clone()
 	}
 }
 
