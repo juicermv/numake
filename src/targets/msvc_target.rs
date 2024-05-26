@@ -1,5 +1,6 @@
 use std::{
-	collections::HashMap,
+	collections::HashMap
+	,
 	fs,
 	fs::File,
 	io::Write,
@@ -281,6 +282,10 @@ impl TargetTrait for MSVCTarget
 		let msvc_env =
 			self.setup_msvc(parent_workspace, self.arch.clone(), None, None)?; // TODO Un-None these
 
+		for (key, val) in msvc_env.clone() {
+			println!("\n{} : {}\n", key, val);
+		}
+
 		if !obj_dir.exists() {
 			fs::create_dir_all(&obj_dir)?;
 		}
@@ -507,12 +512,25 @@ impl TargetTrait for MSVCTarget
 		}
 	}
 
-	fn set_vscode_props(&mut self) -> anyhow::Result<VSCodeProperties>
+	fn set_vscode_props(
+		&mut self,
+		lua_workspace: &mut LuaWorkspace,
+	) -> anyhow::Result<VSCodeProperties>
 	{
+		let msvc_env =
+			self.setup_msvc(lua_workspace, self.arch.clone(), None, None)?;
+		let default_includes: Vec<String> = msvc_env["INCLUDE"]
+			.split(';')
+			.map(|it| dunce::canonicalize(it).unwrap().to_str().unwrap().to_string())
+			.collect();
+
 		self.vscode_properties = VSCodeProperties {
-			compiler_path: "".to_string(),
-			default_includes: vec![],
-			intellisense_mode: "".to_string(),
+			compiler_path: format!("{}bin\\Host{}\\{}\\cl.exe", msvc_env["VCToolsInstallDir"], msvc_env["VSCMD_ARG_HOST_ARCH"], msvc_env["VSCMD_ARG_TGT_ARCH"]),
+			default_includes,
+			intellisense_mode: format!(
+				"{}-msvc-windows",
+				msvc_env["VSCMD_ARG_TGT_ARCH"]
+			),
 		};
 
 		Ok(self.vscode_properties.clone())

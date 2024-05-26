@@ -356,7 +356,7 @@ impl LuaWorkspace
 
 		for name in self.targets.clone().keys() {
 			let mut target = self.targets[name].clone();
-			target.set_vscode_props()?;
+			target.set_vscode_props(&mut self.clone())?;
 			self.targets.insert(name.clone(), target);
 		}
 		// Write cache to disk

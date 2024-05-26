@@ -66,7 +66,7 @@ impl TargetTrait for CustomTarget
 		Ok(ExitStatus::default())
 	}
 
-	fn set_vscode_props(&mut self) -> anyhow::Result<VSCodeProperties>
+	fn set_vscode_props(&mut self, lua_workspace: &mut LuaWorkspace) -> anyhow::Result<VSCodeProperties>
 	{
 		Ok(VSCodeProperties {
 			compiler_path: "custom".to_string(),

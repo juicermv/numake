@@ -44,7 +44,7 @@ pub trait TargetTrait
 		cmd: &mut Command,
 	) -> anyhow::Result<ExitStatus>;
 
-	fn set_vscode_props(&mut self) -> anyhow::Result<VSCodeProperties>;
+	fn set_vscode_props(&mut self, lua_workspace: &mut LuaWorkspace) -> anyhow::Result<VSCodeProperties>;
 }
 
 #[derive(Clone)]
@@ -115,13 +115,13 @@ impl TargetTrait for Target
 		}
 	}
 
-	fn set_vscode_props(&mut self) -> anyhow::Result<VSCodeProperties>
+	fn set_vscode_props(&mut self, lua_workspace: &mut LuaWorkspace) -> anyhow::Result<VSCodeProperties>
 	{
 		match self {
-			Target::Generic(target) => target.set_vscode_props(),
-			Target::MSVC(target) => target.set_vscode_props(),
-			Target::MinGW(target) => target.set_vscode_props(),
-			Target::Custom(target) => target.set_vscode_props(),
+			Target::Generic(target) => target.set_vscode_props(lua_workspace),
+			Target::MSVC(target) => target.set_vscode_props(lua_workspace),
+			Target::MinGW(target) => target.set_vscode_props(lua_workspace),
+			Target::Custom(target) => target.set_vscode_props(lua_workspace),
 		}
 	}
 }

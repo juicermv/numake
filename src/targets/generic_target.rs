@@ -306,7 +306,7 @@ impl TargetTrait for GenericTarget
 		}
 	}
 
-	fn set_vscode_props(&mut self) -> anyhow::Result<VSCodeProperties>
+	fn set_vscode_props(&mut self, lua_workspace: &mut LuaWorkspace) -> anyhow::Result<VSCodeProperties>
 	{
 		self.vscode_properties = VSCodeProperties {
 			compiler_path: which(self.toolset_compiler.clone().unwrap())?
