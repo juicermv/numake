@@ -44,7 +44,7 @@ pub trait TargetTrait
 		cmd: &mut Command,
 	) -> anyhow::Result<ExitStatus>;
 
-	fn set_vscode_props(&mut self) -> VSCodeProperties;
+	fn set_vscode_props(&mut self) -> anyhow::Result<VSCodeProperties>;
 }
 
 #[derive(Clone)]
@@ -115,7 +115,7 @@ impl TargetTrait for Target
 		}
 	}
 
-	fn set_vscode_props(&mut self) -> VSCodeProperties
+	fn set_vscode_props(&mut self) -> anyhow::Result<VSCodeProperties>
 	{
 		match self {
 			Target::Generic(target) => target.set_vscode_props(),

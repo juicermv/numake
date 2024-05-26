@@ -12,9 +12,9 @@ use std::{
 
 use anyhow::anyhow;
 use mlua::{
-	prelude::LuaValue,
 	FromLua,
 	Lua,
+	prelude::LuaValue,
 	Table,
 	UserData,
 	UserDataFields,
@@ -507,7 +507,7 @@ impl TargetTrait for MSVCTarget
 		}
 	}
 
-	fn set_vscode_props(&mut self) -> VSCodeProperties
+	fn set_vscode_props(&mut self) -> anyhow::Result<VSCodeProperties>
 	{
 		self.vscode_properties = VSCodeProperties {
 			compiler_path: "".to_string(),
@@ -515,7 +515,7 @@ impl TargetTrait for MSVCTarget
 			intellisense_mode: "".to_string(),
 		};
 
-		self.vscode_properties.clone()
+		Ok(self.vscode_properties.clone())
 	}
 }
 

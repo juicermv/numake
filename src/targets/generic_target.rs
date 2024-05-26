@@ -11,9 +11,9 @@ use std::{
 
 use anyhow::anyhow;
 use mlua::{
-	prelude::LuaValue,
 	FromLua,
 	Lua,
+	prelude::LuaValue,
 	Table,
 	UserData,
 	UserDataFields,
@@ -306,17 +306,16 @@ impl TargetTrait for GenericTarget
 		}
 	}
 
-	fn set_vscode_props(&mut self) -> VSCodeProperties
+	fn set_vscode_props(&mut self) -> anyhow::Result<VSCodeProperties>
 	{
 		self.vscode_properties = VSCodeProperties {
-			compiler_path: which(self.toolset_compiler.clone().unwrap())
-				.unwrap()
+			compiler_path: which(self.toolset_compiler.clone().unwrap())?
 				.to_str()
 				.unwrap()
 				.to_string(),
 			default_includes: get_gcc_includes(
 				self.toolset_compiler.clone().unwrap(),
-			),
+			)?,
 			intellisense_mode: format!(
 				"{}-{}-{}",
 				env::consts::OS,
@@ -325,7 +324,7 @@ impl TargetTrait for GenericTarget
 			),
 		};
 
-		self.vscode_properties.clone()
+		Ok(self.vscode_properties.clone())
 	}
 }
 

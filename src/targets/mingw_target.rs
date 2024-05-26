@@ -10,9 +10,9 @@ use std::{
 
 use anyhow::anyhow;
 use mlua::{
-	prelude::LuaValue,
 	FromLua,
 	Lua,
+	prelude::LuaValue,
 	Table,
 	UserData,
 	UserDataFields,
@@ -423,7 +423,7 @@ impl TargetTrait for MinGWTarget
 		}
 	}
 
-	fn set_vscode_props(&mut self) -> VSCodeProperties
+	fn set_vscode_props(&mut self) -> anyhow::Result<VSCodeProperties>
 	{
 		self.vscode_properties = VSCodeProperties {
 			compiler_path: which(format!(
@@ -434,8 +434,7 @@ impl TargetTrait for MinGWTarget
 				} else {
 					"gcc"
 				}
-			))
-			.unwrap_or_default()
+			))?
 			.to_str()
 			.unwrap()
 			.to_string(),
@@ -448,7 +447,7 @@ impl TargetTrait for MinGWTarget
 				} else {
 					"gcc"
 				}
-			)),
+			))?,
 
 			intellisense_mode: format!(
 				"{}-gcc-{}",
@@ -463,7 +462,7 @@ impl TargetTrait for MinGWTarget
 			),
 		};
 
-		self.vscode_properties.clone()
+		Ok(self.vscode_properties.clone())
 	}
 }
 

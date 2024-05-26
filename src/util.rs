@@ -144,7 +144,7 @@ pub fn args_to_map(args: Vec<String>) -> HashMap<String, Option<String>>
 	output
 }
 
-pub fn get_gcc_includes(cmd: String) -> Vec<String>
+pub fn get_gcc_includes(cmd: String) -> anyhow::Result<Vec<String>>
 {
 	let result = Command::new(&cmd).args(["-E", "-v", "-"]).output();
 	if result.is_ok() {
@@ -158,35 +158,39 @@ pub fn get_gcc_includes(cmd: String) -> Vec<String>
 			.to_string();
 		output = output.split("End of search list.").collect::<Vec<&str>>()[0]
 			.to_string();
-		for line in output.lines() {
+		for line_r in output.lines() {
+			let mut line = line_r.to_string();
 			if line.is_empty() {
 				continue;
 			}
+
+			while line.starts_with(' ') {
+				line.replace_range(0..1, "");
+			}
+
+			line = line.replace(" /", "/");
 
 			if line.ends_with(" (framework directory)") {
 				// MacOS specific
 				return_vec.push(
 					dunce::canonicalize(
 						line.replace(" (framework directory)", "")
-							.replace(" /", "/"),
-					)
-					.unwrap()
+					)?
 					.to_str()
 					.unwrap()
 					.to_string(),
 				);
 			} else {
 				return_vec.push(
-					dunce::canonicalize(line.to_string().replace(" /", "/"))
-						.unwrap()
+					dunce::canonicalize(line)?
 						.to_str()
 						.unwrap()
 						.to_string(),
 				);
 			}
 		}
-		return_vec
+		Ok(return_vec)
 	} else {
-		Vec::default()
+		Ok(Vec::default())
 	}
 }

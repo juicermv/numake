@@ -4,9 +4,9 @@ use std::process::{
 };
 
 use mlua::{
-	prelude::LuaValue,
 	FromLua,
 	Lua,
+	prelude::LuaValue,
 	UserData,
 	UserDataFields,
 	Value,
@@ -66,13 +66,13 @@ impl TargetTrait for CustomTarget
 		Ok(ExitStatus::default())
 	}
 
-	fn set_vscode_props(&mut self) -> VSCodeProperties
+	fn set_vscode_props(&mut self) -> anyhow::Result<VSCodeProperties>
 	{
-		VSCodeProperties {
+		Ok(VSCodeProperties {
 			compiler_path: "custom".to_string(),
 			default_includes: Vec::default(),
 			intellisense_mode: "".to_string(),
-		}
+		})
 	}
 }
 

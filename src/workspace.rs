@@ -7,13 +7,13 @@ use std::{
 
 use anyhow::anyhow;
 use mlua::{
+	Compiler,
+	FromLua,
+	Lua,
 	prelude::{
 		LuaError,
 		LuaValue,
 	},
-	Compiler,
-	FromLua,
-	Lua,
 	UserData,
 	UserDataFields,
 	UserDataMethods,
@@ -356,13 +356,13 @@ impl LuaWorkspace
 
 		for name in self.targets.clone().keys() {
 			let mut target = self.targets[name].clone();
-			target.set_vscode_props();
+			target.set_vscode_props()?;
 			self.targets.insert(name.clone(), target);
 		}
 		// Write cache to disk
 		self.cache.flush()?;
 
-		spinner.finish();
+		spinner.finish_and_clear();
 		self.ui
 			.progress_manager
 			.println(self.ui.format_info(format!(
@@ -423,7 +423,7 @@ impl LuaWorkspace
 			let result =
 				self.targets.get(_target).unwrap().build(&mut self.clone());
 			if result.is_ok() {
-				spinner.finish();
+				spinner.finish_and_clear();
 				self.ui.progress_manager.println(self.ui.format_info(
 					format!(
 						"Building target {} done in {}ms.",
@@ -434,7 +434,7 @@ impl LuaWorkspace
 				Ok(())
 			} else {
 				let err = result.err().unwrap();
-				spinner.finish();
+				spinner.finish_and_clear();
 				self.ui.progress_manager.println(self.ui.format_err(
 					format!("Building target {} FAILED!", _target,),
 				))?;
@@ -537,7 +537,7 @@ impl LuaWorkspace
 		if self.cache.check_dir_exists(&url) {
 			self.ui
 				.progress_manager
-				.println(self.ui.format_warn(format!(
+				.println(self.ui.format_info(format!(
 				"Cache entry for [{}] found. \nNot downloading. This is okay!",
 				url
 			)))?;
@@ -559,7 +559,7 @@ impl LuaWorkspace
 
 				ZipArchive::new(Cursor::new(response.bytes()?))?
 					.extract(&path)?;
-				spinner.finish();
+				spinner.finish_and_clear();
 				self.ui.progress_manager.println(
 					self.ui.format_ok(format!("Done extracting! [{}]", url)),
 				)?;
