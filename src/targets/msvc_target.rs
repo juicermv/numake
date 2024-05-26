@@ -512,6 +512,22 @@ impl TargetTrait for MSVCTarget
 		}
 	}
 
+
+	#[cfg(not(windows))]
+	fn set_vscode_props(
+		&mut self,
+		lua_workspace: &mut LuaWorkspace,
+	) -> anyhow::Result<VSCodeProperties> {
+		Ok(
+			VSCodeProperties {
+				compiler_path: "".to_string(),
+				default_includes: vec![],
+				intellisense_mode: "".to_string(),
+			}
+		)
+	}
+
+	#[cfg(windows)]
 	fn set_vscode_props(
 		&mut self,
 		lua_workspace: &mut LuaWorkspace,
