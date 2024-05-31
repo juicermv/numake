@@ -282,10 +282,6 @@ impl TargetTrait for MSVCTarget
 		let msvc_env =
 			self.setup_msvc(parent_workspace, self.arch.clone(), None, None)?; // TODO Un-None these
 
-		for (key, val) in msvc_env.clone() {
-			println!("\n{} : {}\n", key, val);
-		}
-
 		if !obj_dir.exists() {
 			fs::create_dir_all(&obj_dir)?;
 		}
