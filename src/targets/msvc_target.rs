@@ -540,7 +540,7 @@ impl TargetTrait for MSVCTarget
 			compiler_path: format!("{}bin\\Host{}\\{}\\cl.exe", msvc_env["VCToolsInstallDir"], msvc_env["VSCMD_ARG_HOST_ARCH"], msvc_env["VSCMD_ARG_TGT_ARCH"]),
 			default_includes,
 			intellisense_mode: format!(
-				"{}-msvc-windows",
+				"windows-msvc-{}",
 				msvc_env["VSCMD_ARG_TGT_ARCH"]
 			),
 		};
