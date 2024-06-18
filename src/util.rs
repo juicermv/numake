@@ -6,14 +6,15 @@ use std::{
 };
 
 use anyhow::anyhow;
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use mlua::{
 	Integer,
 	IntoLua,
 	Lua,
 };
-use sha256::digest;
 
-pub fn hash_string(val: &String) -> String { digest(val).to_string() }
+pub fn hash_string(val: &String) -> String { BASE64_STANDARD.encode(val) }
 
 // Horror
 pub fn into_lua_value<'lua>(
