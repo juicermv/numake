@@ -17,7 +17,7 @@ use indicatif::{
 	ProgressStyle,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct NumakeUI
 {
 	pub quiet: bool,

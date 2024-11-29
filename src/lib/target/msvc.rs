@@ -24,7 +24,7 @@ use mlua::{
 use pathdiff::diff_paths;
 use serde::Serialize;
 use tempfile::tempdir;
-use crate::lib::error::NUMAKE_ERROR;
+use crate::lib::error::NuMakeError::{AddFileIsDirectory, AssetCopyPathOutsideWorkingDirectory, MsvcWindowsOnly, PathOutsideWorkingDirectory, VcNotFound};
 use crate::lib::target::{TargetTrait, VSCodeProperties};
 use crate::lib::ui::NumakeUI;
 use crate::lib::util::{download_vswhere, to_lua_result};
@@ -97,13 +97,13 @@ impl MSVCTarget
 	) -> anyhow::Result<()>
 	{
 		if !file.starts_with(&self.workdir) {
-			Err(mlua::Error::runtime(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
+			return Err(anyhow!(PathOutsideWorkingDirectory))
 		}
 
 		if file.is_file() {
 			self.files.push(file.clone());
 		} else {
-			Err(mlua::Error::runtime(NUMAKE_ERROR.ADD_FILE_IS_DIRECTORY))?
+			return Err(anyhow!(AddFileIsDirectory))
 		}
 		Ok(())
 	}
@@ -114,13 +114,13 @@ impl MSVCTarget
 	) -> anyhow::Result<()>
 	{
 		if !file.starts_with(&self.workdir) {
-			Err(mlua::Error::runtime(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
+			return Err(anyhow!(PathOutsideWorkingDirectory))
 		}
 
 		if file.is_file() {
 			self.resources.push(file.clone());
 		} else {
-			Err(mlua::Error::runtime(NUMAKE_ERROR.ADD_FILE_IS_DIRECTORY))?
+			return Err(anyhow!(AddFileIsDirectory))
 		}
 		Ok(())
 	}
@@ -131,13 +131,13 @@ impl MSVCTarget
 	) -> anyhow::Result<()>
 	{
 		if !file.starts_with(&self.workdir) {
-			Err(mlua::Error::runtime(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
+			return Err(anyhow!(PathOutsideWorkingDirectory))
 		}
 
 		if file.is_file() {
 			self.def_files.push(file.clone());
 		} else {
-			Err(mlua::Error::runtime(NUMAKE_ERROR.ADD_FILE_IS_DIRECTORY))?
+			return Err(anyhow!(AddFileIsDirectory))
 		}
 		Ok(())
 	}
@@ -150,7 +150,7 @@ impl MSVCTarget
 		for (key, val) in self.assets.clone() {
 			let copy_path = out_dir.join(val);
 			if !copy_path.starts_with(out_dir) {
-				Err(anyhow!(NUMAKE_ERROR.ASSET_COPY_PATH_OUTSIDE_OUTPUT_DIR))?
+				Err(anyhow!(AssetCopyPathOutsideWorkingDirectory))?
 			} else {
 				fs::copy(key, copy_path)?;
 			}
@@ -237,7 +237,7 @@ impl MSVCTarget
 
 			Ok(env_variables)
 		} else {
-			Err(anyhow!(&NUMAKE_ERROR.VC_NOT_FOUND))
+			Err(anyhow!(VcNotFound))
 		}
 	}
 }
@@ -250,7 +250,7 @@ impl TargetTrait for MSVCTarget
 		_: &mut LuaWorkspace,
 	) -> anyhow::Result<()>
 	{
-		Err(anyhow!(&NUMAKE_ERROR.MSVC_WINDOWS_ONLY))
+		Err(anyhow!(MsvcWindowsOnly))
 	}
 
 	#[cfg(windows)]
@@ -542,7 +542,7 @@ impl TargetTrait for MSVCTarget
 
 impl UserData for MSVCTarget
 {
-	fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F)
+	fn add_fields<F: UserDataFields<Self>>(fields: &mut F)
 	{
 		{
 			fields.add_field_method_get("include_paths", |_, this| {
@@ -792,7 +792,7 @@ impl UserData for MSVCTarget
 					let path = dunce::canonicalize(this.workdir.join(key))?; // Will automatically error if path doesn't exist.
 					if !path.starts_with(&this.workdir) {
 						Err(mlua::Error::runtime(
-							NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR,
+							PathOutsideWorkingDirectory
 						))?
 					}
 
@@ -805,11 +805,11 @@ impl UserData for MSVCTarget
 	}
 }
 
-impl<'lua> FromLua<'lua> for MSVCTarget
+impl FromLua for MSVCTarget
 {
 	fn from_lua(
-		value: LuaValue<'lua>,
-		_: &'lua Lua,
+		value: LuaValue,
+		_: &Lua,
 	) -> mlua::Result<Self>
 	{
 		match value {

@@ -8,7 +8,7 @@ use std::{
 use toml::Table;
 use crate::lib::util::hash_string;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Cache
 {
 	pub user_values: Table,
