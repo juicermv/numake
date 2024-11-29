@@ -12,15 +12,8 @@ use mlua::{
 	Value,
 };
 use serde::Serialize;
-
-use crate::{
-	targets::target::{
-		Target,
-		TargetTrait,
-		VSCodeProperties,
-	},
-	workspace::LuaWorkspace,
-};
+use crate::lib::target::{Target, TargetTrait, VSCodeProperties};
+use crate::lib::workspace::LuaWorkspace;
 
 #[derive(Clone, Serialize)]
 pub struct CustomTarget

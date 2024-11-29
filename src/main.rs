@@ -7,22 +7,10 @@
 use clap::Parser;
 use console::Term;
 use mlua::Lua;
+use crate::lib::cli_args::{Cli, SubCommands};
+use crate::lib::workspace::LuaWorkspace;
 
-use crate::{
-	cli_args::{
-		Cli,
-		SubCommands,
-	},
-	workspace::LuaWorkspace,
-};
-
-mod cache;
-mod cli_args;
-mod error;
-mod targets;
-mod ui;
-mod util;
-mod workspace;
+mod lib;
 
 fn run() -> anyhow::Result<()>
 {
@@ -49,7 +37,7 @@ fn run() -> anyhow::Result<()>
 		SubCommands::List(args) => {
 			let mut proj = LuaWorkspace::new_dummy(args)?;
 			proj.process(&lua)?;
-			println!("\nAvailable targets: {}", proj.list_targets()?);
+			println!("\nAvailable target: {}", proj.list_targets()?);
 		}
 	}
 
@@ -67,11 +55,8 @@ fn main() -> anyhow::Result<()>
 mod tests
 {
 	use mlua::Lua;
-
-	use crate::{
-		cli_args::NuMakeArgs,
-		workspace::LuaWorkspace,
-	};
+	use crate::lib::cli_args::NuMakeArgs;
+	use crate::lib::workspace::LuaWorkspace;
 
 	#[test]
 	fn gcc_build() -> anyhow::Result<()>

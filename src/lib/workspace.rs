@@ -22,32 +22,16 @@ use mlua::{
 use serde::Serialize;
 use zip::ZipArchive;
 
-use crate::{
-	cache::Cache,
-	cli_args::{
-		InspectArgs,
-		ListArgs,
-		NuMakeArgs,
-	},
-	error::NUMAKE_ERROR,
-	targets::{
-		custom_target::CustomTarget,
-		generic_target::GenericTarget,
-		mingw_target::MinGWTarget,
-		msvc_target::MSVCTarget,
-		target::{
-			Target,
-			TargetTrait,
-		},
-	},
-	ui::NumakeUI,
-	util::{
-		args_to_map,
-		into_lua_value,
-		into_toml_value,
-		to_lua_result,
-	},
-};
+use crate::lib::cache::Cache;
+use crate::lib::cli_args::{InspectArgs, ListArgs, NuMakeArgs};
+use crate::lib::error::NUMAKE_ERROR;
+use crate::lib::target::custom::CustomTarget;
+use crate::lib::target::generic::GenericTarget;
+use crate::lib::target::mingw::MinGWTarget;
+use crate::lib::target::msvc::MSVCTarget;
+use crate::lib::target::{Target, TargetTrait};
+use crate::lib::ui::NumakeUI;
+use crate::lib::util::{args_to_map, into_lua_value, into_toml_value, to_lua_result};
 
 #[derive(Clone, Serialize)]
 pub struct LuaWorkspace

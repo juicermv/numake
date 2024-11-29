@@ -6,8 +6,7 @@ use std::{
 };
 
 use toml::Table;
-
-use crate::util::hash_string;
+use crate::lib::util::hash_string;
 
 #[derive(Clone)]
 pub struct Cache

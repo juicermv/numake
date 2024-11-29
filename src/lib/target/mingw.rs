@@ -1,9 +1,6 @@
 use std::{
-	collections::HashMap
-	,
+	collections::HashMap,
 	fs,
-	fs::File,
-	io::Write,
 	path::PathBuf,
 	process::{
 		Command,
@@ -23,24 +20,15 @@ use mlua::{
 };
 use pathdiff::diff_paths;
 use serde::Serialize;
-use tempfile::tempdir;
-
-use crate::{
-	error::NUMAKE_ERROR,
-	targets::target::{
-		TargetTrait,
-		VSCodeProperties,
-	},
-	ui::NumakeUI,
-	util::{
-		download_vswhere,
-		to_lua_result,
-	},
-	workspace::LuaWorkspace,
-};
+use which::which;
+use crate::lib::error::NUMAKE_ERROR;
+use crate::lib::target::{TargetTrait, VSCodeProperties};
+use crate::lib::ui::NumakeUI;
+use crate::lib::util::{get_gcc_includes, to_lua_result};
+use crate::lib::workspace::LuaWorkspace;
 
 #[derive(Clone, Serialize)]
-pub struct MSVCTarget
+pub struct MinGWTarget
 {
 	pub compiler_flags: Vec<String>,
 	pub linker_flags: Vec<String>,
@@ -64,12 +52,13 @@ pub struct MSVCTarget
 
 	pub resources: Vec<PathBuf>,
 	pub def_files: Vec<PathBuf>,
-	pub rc_flags: Vec<String>,
+	pub windres_flags: Vec<String>,
 	arch: Option<String>,
 	static_lib: bool,
+	lang: String,
 }
 
-impl MSVCTarget
+impl MinGWTarget
 {
 	pub fn new(
 		name: String,
@@ -78,7 +67,7 @@ impl MSVCTarget
 		ui: NumakeUI,
 	) -> anyhow::Result<Self>
 	{
-		Ok(MSVCTarget {
+		Ok(MinGWTarget {
 			compiler_flags: Vec::new(),
 			linker_flags: Vec::new(),
 			include_paths: Vec::new(),
@@ -93,9 +82,10 @@ impl MSVCTarget
 			ui,
 			resources: Vec::new(),
 			def_files: Vec::new(),
-			rc_flags: Vec::new(),
+			windres_flags: Vec::new(),
 			static_lib: false,
 			name,
+			lang: "C++".to_string(),
 			vscode_properties: VSCodeProperties::default(),
 		})
 	}
@@ -167,102 +157,10 @@ impl MSVCTarget
 
 		Ok(())
 	}
-
-	fn setup_msvc(
-		&self,
-		workspace: &mut LuaWorkspace,
-		arch: Option<String>,
-		platform_type: Option<String>,
-		winsdk_version: Option<String>,
-	) -> anyhow::Result<HashMap<String, String>>
-	{
-		let vswhere_path = workspace
-			.cache
-			.get_dir(&"vswhere".to_string())?
-			.join("vswhere.exe");
-		if !vswhere_path.exists() {
-			download_vswhere(&vswhere_path)?;
-		}
-
-		let vswhere_output: String = String::from_utf8_lossy(
-			Command::new(vswhere_path)
-				.args([
-					"-latest",
-					"-requires",
-					"Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-					"-find",
-					"VC/Auxiliary/Build",
-					"-format",
-					"JSON",
-				])
-				.output()?
-				.stdout
-				.as_slice(),
-		)
-		.to_string();
-
-		let vswhere_json: Vec<String> = serde_json::from_str(&vswhere_output)?;
-
-		if !vswhere_json.is_empty() {
-			let auxpath = dunce::canonicalize(&vswhere_json[0])?;
-
-			let dir = tempdir()?;
-			let bat_path = dir.path().join("exec.bat");
-			let env_path = dir.path().join("env.txt");
-
-			let mut bat_file = File::create(&bat_path)?;
-			writeln!(&bat_file, "@echo off")?;
-			writeln!(
-				&bat_file,
-				"@call \"{}\" {} {} {}",
-				auxpath.join("vcvarsall.bat").to_str().unwrap(),
-				arch.unwrap_or("x64".to_string()),
-				platform_type.unwrap_or("".to_string()),
-				winsdk_version.unwrap_or("".to_string())
-			)?;
-			writeln!(&bat_file, "set > {}", env_path.to_str().unwrap())?;
-			bat_file.flush()?;
-
-			self.execute(Command::new("cmd").args([
-				"/C",
-				"@call",
-				bat_path.to_str().unwrap(),
-			]))?;
-
-			let env: String = fs::read_to_string(env_path)?;
-
-			dir.close()?;
-			let mut env_variables: HashMap<String, String> = HashMap::new();
-			for line in env.lines() {
-				let halves: Vec<&str> = line.split('=').collect();
-				if halves.len() > 1 {
-					env_variables
-						.insert(halves[0].to_string(), halves[1].to_string());
-				} else {
-					env_variables
-						.insert(halves[0].to_string(), String::default());
-				}
-			}
-
-			Ok(env_variables)
-		} else {
-			Err(anyhow!(&NUMAKE_ERROR.VC_NOT_FOUND))
-		}
-	}
 }
 
-impl TargetTrait for MSVCTarget
+impl TargetTrait for MinGWTarget
 {
-	#[cfg(not(windows))]
-	fn build(
-		&self,
-		_: &mut LuaWorkspace,
-	) -> anyhow::Result<()>
-	{
-		Err(anyhow!(&NUMAKE_ERROR.MSVC_WINDOWS_ONLY))
-	}
-
-	#[cfg(windows)]
 	fn build(
 		&self,
 		parent_workspace: &mut LuaWorkspace,
@@ -278,9 +176,6 @@ impl TargetTrait for MSVCTarget
 		let res_dir: PathBuf = parent_workspace
 			.workspace
 			.join(format!("res/{}", &self.name));
-
-		let msvc_env =
-			self.setup_msvc(parent_workspace, self.arch.clone(), None, None)?; // TODO Un-None these
 
 		if !obj_dir.exists() {
 			fs::create_dir_all(&obj_dir)?;
@@ -302,16 +197,28 @@ impl TargetTrait for MSVCTarget
 			parent_workspace.output.clone()
 		};
 
+		let mingw = format!(
+			"{}-w64-mingw32-",
+			self.arch.clone().unwrap_or("x86_64".to_string())
+		);
+
 		// COMPILATION STEP
 		for file in self.files.clone() {
-			let mut compiler = Command::new("CL");
+			let mut compiler = Command::new(
+				mingw.clone()
+					+ if self.lang.to_lowercase() == "c++" {
+						"g++"
+					} else {
+						"gcc"
+					},
+			);
 
 			let o_file = obj_dir.join(
 				diff_paths(&file, self.workdir.clone())
 					.unwrap()
 					.to_str()
 					.unwrap()
-					.to_string() + ".obj",
+					.to_string() + ".o",
 			);
 
 			if !o_file.parent().unwrap().exists() {
@@ -320,17 +227,17 @@ impl TargetTrait for MSVCTarget
 
 			let mut compiler_args = Vec::from([
 				"-c".to_string(),
-				format!("-Fo{}", o_file.to_str().unwrap()),
+				format!("-o{}", o_file.to_str().unwrap()),
 			]);
 
 			o_files.push(o_file.to_str().unwrap().to_string());
 
 			for incl in self.include_paths.clone() {
-				compiler_args.push(format!("-I{incl}"));
+				compiler_args.push(format!("-I{incl}"))
 			}
 
 			for define in self.defines.clone() {
-				compiler_args.push(format!("-D{define}"));
+				compiler_args.push(format!("-D{define}"))
 			}
 
 			for flag in self.compiler_flags.clone() {
@@ -341,7 +248,6 @@ impl TargetTrait for MSVCTarget
 
 			self.execute(
 				compiler
-					.envs(&msvc_env)
 					.args(&compiler_args)
 					.current_dir(&parent_workspace.working_directory),
 			)?;
@@ -349,111 +255,114 @@ impl TargetTrait for MSVCTarget
 
 		// RESOURCE FILE HANDLING
 		for resource_file in self.resources.clone() {
-			let mut resource_compiler = Command::new("RC");
+			let mut resource_compiler = Command::new(mingw.clone() + "windres");
 
-			let res_file = res_dir.join(
+			let coff_file = res_dir.join(
 				diff_paths(&resource_file, self.workdir.clone())
 					.unwrap()
 					.to_str()
 					.unwrap()
-					.to_string() + ".res",
+					.to_string() + ".o",
 			);
 
-			if !res_file.parent().unwrap().exists() {
-				fs::create_dir_all(res_file.parent().unwrap())?;
+			if !coff_file.parent().unwrap().exists() {
+				fs::create_dir_all(coff_file.parent().unwrap())?;
 			}
 
 			let mut res_compiler_args = Vec::from([
 				"-v".to_string(),
-				format!("-fo{}", res_file.to_str().unwrap()),
+				resource_file.to_str().unwrap_or("ERROR").to_string(),
+				"-OCOFF".to_string(),
 			]);
 
 			for incl in self.include_paths.clone() {
-				res_compiler_args.push(format!("-i{incl}"));
+				res_compiler_args.push(format!("-I{incl}"));
 			}
 
 			for define in self.defines.clone() {
-				res_compiler_args.push(format!("-d{define}"));
+				res_compiler_args.push(format!("-D{define}"));
 			}
 
 			res_compiler_args
-				.push(resource_file.to_str().unwrap_or("ERROR").to_string());
+				.push(format!("-o{}", coff_file.to_str().unwrap()));
 
 			self.execute(
 				resource_compiler
-					.envs(&msvc_env)
 					.args(&res_compiler_args)
 					.current_dir(&parent_workspace.working_directory),
 			)?;
 
-			// TURN RES FILES INTO OBJECTS
-			let mut cvtres = Command::new("CVTRES");
+			o_files.push(coff_file.to_str().unwrap().to_string());
+		}
 
-			let rbj_file = obj_dir.join(
-				diff_paths(&resource_file, self.workdir.clone())
-					.unwrap()
-					.to_str()
-					.unwrap()
-					.to_string() + ".rbj",
+		if !self.static_lib {
+			// LINKING STEP
+			let mut linker = Command::new(
+				mingw.clone()
+					+ if self.lang.to_lowercase() == "c++" {
+						"g++"
+					} else {
+						"gcc"
+					},
 			);
+			let mut linker_args = Vec::new();
 
-			if !rbj_file.parent().unwrap().exists() {
-				fs::create_dir_all(rbj_file.parent().unwrap())?;
+			linker_args.append(&mut o_files);
+
+			for def_file in self.def_files.clone() {
+				linker_args.push(def_file.to_str().unwrap().to_string());
 			}
 
-			let mut cvtres_args =
-				Vec::from([format!("/OUT:{}", rbj_file.to_str().unwrap())]);
-
-			o_files.push(rbj_file.to_str().unwrap().to_string());
-
-			for define in self.defines.clone() {
-				cvtres_args.push(format!("/DEFINE:{define}"));
+			for path in self.lib_paths.clone() {
+				linker_args.push(format!("-L{path}"))
 			}
 
-			cvtres_args.push(res_file.to_str().unwrap_or("ERROR").to_string());
+			for lib in self.libs.clone() {
+				linker_args.push(format!("-l{lib}"))
+			}
+
+			for flag in self.compiler_flags.clone() {
+				linker_args.push(flag)
+			}
+
+			for flag in self.linker_flags.clone() {
+				linker_args.push("-Wl,".to_string() + &flag)
+			}
+
+			linker_args.push(format!(
+				"-o{}/{}",
+				&out_dir.to_str().unwrap_or("ERROR"),
+				&output.unwrap_or("out".to_string())
+			));
 
 			self.execute(
-				cvtres
-					.envs(&msvc_env)
-					.args(&cvtres_args)
+				linker
+					.args(&linker_args)
+					.current_dir(&parent_workspace.working_directory),
+			)?;
+		} else {
+			let mut linker = Command::new(mingw.clone() + "ar");
+			let mut linker_args = Vec::from([
+				"rcs".to_string(),
+				format!(
+					"{}/{}",
+					&out_dir.to_str().unwrap_or("ERROR"),
+					&output.unwrap_or("out".to_string())
+				),
+			]);
+
+			linker_args.append(&mut o_files);
+
+			for def_file in self.def_files.clone() {
+				linker_args.push(def_file.to_str().unwrap().to_string());
+			}
+
+			self.execute(
+				linker
+					.args(&linker_args)
 					.current_dir(&parent_workspace.working_directory),
 			)?;
 		}
-
-		// LINKING STEP
-		let mut linker =
-			Command::new(if self.static_lib { "LIB" } else { "LINK" });
-		let mut linker_args = Vec::new();
-
-		linker_args.push(format!(
-			"/OUT:{}/{}",
-			&out_dir.to_str().unwrap_or("ERROR"),
-			&output.unwrap_or("out".to_string())
-		));
-
-		for path in self.lib_paths.clone() {
-			linker_args.push(format!("/LIBPATH:{path}"));
-		}
-
-		for def_file in self.def_files.clone() {
-			linker_args
-				.push(format!("/DEF:{}", def_file.to_str().unwrap_or("ERROR")));
-		}
-
-		for flag in self.linker_flags.clone() {
-			linker_args.push(flag);
-		}
-
-		linker_args.append(&mut o_files);
-
-		linker_args.append(&mut self.libs.clone());
-
-		self.execute(
-			linker
-				.args(&linker_args)
-				.envs(&msvc_env)
-				.current_dir(&parent_workspace.working_directory),
-		)?;
 
 		self.copy_assets(&out_dir)?;
 
@@ -466,7 +375,6 @@ impl TargetTrait for MSVCTarget
 	) -> anyhow::Result<ExitStatus>
 	{
 		let result = cmd.output();
-
 		if result.is_err() {
 			let err = result.err().unwrap();
 			Err(anyhow!(format!(
@@ -476,16 +384,14 @@ impl TargetTrait for MSVCTarget
 			)))
 		} else {
 			let output = result.ok().unwrap();
-			let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+			let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
 			if output.status.success() {
-				self.ui.progress_manager.println(
-					if stdout.contains(": warning ") {
-						self.ui.format_warn(stdout.clone())
-					} else {
-						self.ui.format_ok(stdout.clone())
-					},
-				)?;
+				if !stderr.is_empty() {
+					self.ui
+						.progress_manager
+						.println(self.ui.format_warn(stderr.clone()))?;
+				}
 
 				self.ui.progress_manager.println(self.ui.format_ok(
 					format!(
@@ -503,45 +409,47 @@ impl TargetTrait for MSVCTarget
 						output.status
 					),
 				))?;
-				Err(anyhow!(stdout))
+				Err(anyhow!(stderr))
 			}
 		}
 	}
 
-
-	#[cfg(not(windows))]
-	fn set_vscode_props(
-		&mut self,
-		lua_workspace: &mut LuaWorkspace,
-	) -> anyhow::Result<VSCodeProperties> {
-		Ok(
-			VSCodeProperties {
-				compiler_path: "".to_string(),
-				default_includes: vec![],
-				intellisense_mode: "".to_string(),
-			}
-		)
-	}
-
-	#[cfg(windows)]
-	fn set_vscode_props(
-		&mut self,
-		lua_workspace: &mut LuaWorkspace,
-	) -> anyhow::Result<VSCodeProperties>
+	fn set_vscode_props(&mut self, lua_workspace: &mut LuaWorkspace) -> anyhow::Result<VSCodeProperties>
 	{
-		let msvc_env =
-			self.setup_msvc(lua_workspace, self.arch.clone(), None, None)?;
-		let default_includes: Vec<String> = msvc_env["INCLUDE"]
-			.split(';')
-			.map(|it| dunce::canonicalize(it).unwrap().to_str().unwrap().to_string())
-			.collect();
-
 		self.vscode_properties = VSCodeProperties {
-			compiler_path: format!("{}bin\\Host{}\\{}\\cl.exe", msvc_env["VCToolsInstallDir"], msvc_env["VSCMD_ARG_HOST_ARCH"], msvc_env["VSCMD_ARG_TGT_ARCH"]),
-			default_includes,
+			compiler_path: which(format!(
+				"{}-w64-mingw32-{}",
+				self.arch.clone().unwrap_or("x86_64".to_string()),
+				if self.lang.to_lowercase() == "c++" {
+					"g++"
+				} else {
+					"gcc"
+				}
+			))?
+			.to_str()
+			.unwrap()
+			.to_string(),
+
+			default_includes: get_gcc_includes(format!(
+				"{}-w64-mingw32-{}",
+				self.arch.clone().unwrap_or("x86_64".to_string()),
+				if self.lang.to_lowercase() == "c++" {
+					"g++"
+				} else {
+					"gcc"
+				}
+			))?,
+
 			intellisense_mode: format!(
-				"windows-msvc-{}",
-				msvc_env["VSCMD_ARG_TGT_ARCH"]
+				"{}-gcc-{}",
+				std::env::consts::OS,
+				if self.arch == Some("i686".to_string()) {
+					"x86".to_string()
+				} else if self.arch == Some("x86_64".to_string()) {
+					"x64".to_string()
+				} else {
+					self.arch.clone().unwrap_or("${default}".into())
+				}
 			),
 		};
 
@@ -549,7 +457,7 @@ impl TargetTrait for MSVCTarget
 	}
 }
 
-impl UserData for MSVCTarget
+impl UserData for MinGWTarget
 {
 	fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F)
 	{
@@ -724,14 +632,14 @@ impl UserData for MSVCTarget
 		}
 
 		{
-			fields.add_field_method_get("rc_flags", |_, this| {
-				Ok(this.rc_flags.clone())
+			fields.add_field_method_get("windres_flags", |_, this| {
+				Ok(this.windres_flags.clone())
 			});
 
 			fields.add_field_method_set(
-				"rc_flags",
+				"windres_flags",
 				|_, this, val: Vec<String>| {
-					this.rc_flags = val;
+					this.windres_flags = val;
 					Ok(())
 				},
 			);
@@ -814,7 +722,7 @@ impl UserData for MSVCTarget
 	}
 }
 
-impl<'lua> FromLua<'lua> for MSVCTarget
+impl<'lua> FromLua<'lua> for MinGWTarget
 {
 	fn from_lua(
 		value: LuaValue<'lua>,

@@ -1,3 +1,8 @@
+pub mod custom;
+pub mod generic;
+pub mod msvc;
+pub mod mingw;
+
 use std::process::{
 	Command,
 	ExitStatus,
@@ -13,16 +18,11 @@ use serde::{
 	Serialize,
 	Serializer,
 };
-
-use crate::{
-	targets::{
-		custom_target::CustomTarget,
-		generic_target::GenericTarget,
-		mingw_target::MinGWTarget,
-		msvc_target::MSVCTarget,
-	},
-	workspace::LuaWorkspace,
-};
+use crate::lib::target::custom::CustomTarget;
+use crate::lib::target::generic::GenericTarget;
+use crate::lib::target::mingw::MinGWTarget;
+use crate::lib::target::msvc::MSVCTarget;
+use crate::lib::workspace::LuaWorkspace;
 
 #[derive(Serialize, Clone, Default)]
 pub struct VSCodeProperties
