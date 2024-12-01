@@ -6,14 +6,20 @@ use std::{
 };
 
 use anyhow::anyhow;
-use base32::Alphabet;
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD_NO_PAD;
 use mlua::{
 	Integer,
 	IntoLua,
 	Lua,
 };
 
-pub fn hash_string(val: &String) -> String { base32::encode(Alphabet::Crockford, val.as_bytes()) }
+pub fn hash_string(val: &String) -> String {
+	let mut result = BASE64_STANDARD_NO_PAD.encode(val);
+	result.truncate(8);
+
+	result
+}
 
 // Horror
 pub fn into_lua_value(
