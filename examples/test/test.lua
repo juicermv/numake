@@ -10,7 +10,11 @@ mingw = workspace:create_mingw_target("mingw")
 mingw.arch = "x86_64"
 
 mingw.output = "test.exe"
-mingw.include_paths = {sdl_path .. "/include"}
+mingw.include_paths = {
+    sdl_path .. "/include",
+    sdl_path .. "/include/SDL2"
+}
+
 mingw.library_paths = {sdl_path .. "/lib"}
 mingw.libraries = {
     "mingw32",
@@ -41,8 +45,7 @@ sdl_path_msvc = workspace:download_zip("https:/github.com/libsdl-org/SDL/release
 
 msvc = workspace:create_msvc_target("msvc")
 msvc.include_paths = {
-    sdl_path_msvc .. "/SDL2-2.30.2/include",
-    sdl_path_msvc .. "/SDL2-2.30.2/include/SDL2"
+    sdl_path_msvc .. "/SDL2-2.30.2/include"
 }
 
 msvc.libraries = {
