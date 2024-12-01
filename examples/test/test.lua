@@ -11,8 +11,8 @@ mingw.arch = "x86_64"
 
 mingw.output = "test.exe"
 mingw.include_paths = {
-    sdl_path .. "/include",
-    sdl_path .. "/include/SDL2"
+    sdl_path .. "/include/SDL2",
+    sdl_path .. "/include"
 }
 
 mingw.library_paths = {sdl_path .. "/lib"}
