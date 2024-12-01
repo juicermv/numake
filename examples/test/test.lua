@@ -41,7 +41,8 @@ sdl_path_msvc = workspace:download_zip("https:/github.com/libsdl-org/SDL/release
 
 msvc = workspace:create_msvc_target("msvc")
 msvc.include_paths = {
-    sdl_path_msvc .. "/SDL2-2.30.2/include"
+    sdl_path_msvc .. "/SDL2-2.30.2/include",
+    sdl_path_msvc .. "/SDL2-2.30.2/include/SDL2"
 }
 
 msvc.libraries = {
