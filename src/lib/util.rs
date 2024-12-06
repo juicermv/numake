@@ -14,9 +14,11 @@ use mlua::{
 	Lua,
 };
 
+use sha256::digest;
+
 pub fn hash_string(val: &String) -> String {
-	let mut result = BASE64_STANDARD_NO_PAD.encode(val);
-	result.truncate(8);
+	let mut result = digest(val);
+	result.truncate(16);
 
 	result
 }
