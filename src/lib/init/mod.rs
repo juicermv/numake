@@ -2,7 +2,7 @@ use crate::lib::cli::sub_commands::SubCommands;
 use crate::lib::cli::Cli;
 use crate::lib::data::environment::Environment;
 use crate::lib::runtime::Runtime;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use mlua::prelude::LuaResult;
 use std::env;
 

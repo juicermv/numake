@@ -1,5 +1,5 @@
 use std::fs;
-use mlua::{Chunk, Compiler, Lua};
+use mlua::{Compiler, Lua};
 use mlua::prelude::LuaResult;
 use crate::lib::util::cache::Cache;
 use crate::lib::compilers::{generic, mingw, msvc};

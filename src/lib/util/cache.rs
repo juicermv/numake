@@ -1,9 +1,8 @@
 use crate::lib::data::environment::Environment;
 use crate::lib::util::hash_string;
 use bzip2::read::{BzDecoder, BzEncoder};
-use bzip2::{Action, Compress, Compression, Decompress};
+use bzip2::Compression;
 use std::fs::File;
-use std::io::{BufReader, Read};
 use std::{fs, io, path::PathBuf, str::FromStr};
 use toml::Table;
 

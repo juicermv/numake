@@ -1,10 +1,8 @@
 use crate::lib::util::cache::Cache;
 use crate::lib::data::environment::Environment;
-use crate::lib::util::hash_string;
 use mlua::{UserData, UserDataMethods};
 use serde::Serialize;
 use std::io::Cursor;
-use toml::to_string;
 use zip::ZipArchive;
 use crate::lib::util::ui::NumakeUI;
 
