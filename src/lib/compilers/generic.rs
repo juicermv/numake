@@ -7,7 +7,6 @@ use std::{
 use crate::lib::data::environment::Environment;
 use crate::lib::data::project::Project;
 use crate::lib::data::source_file_type::SourceFileType;
-use crate::lib::ui::NumakeUI;
 use anyhow::anyhow;
 use mlua::{
 	UserData,
@@ -15,6 +14,7 @@ use mlua::{
 };
 use pathdiff::diff_paths;
 use serde::Serialize;
+use crate::lib::util::ui::NumakeUI;
 
 #[derive(Clone, Serialize)]
 pub struct Generic {
@@ -216,7 +216,7 @@ impl UserData for Generic {
 			 (project, compiler, linker): (Project, String, String)| unsafe {
 				match this.build(&compiler, &linker, &project) {
 					Ok(_) => Ok(()),
-					Err(err) => Err(mlua::Error::runtime(err)),
+					Err(err) => Err(mlua::Error::external(err))
 				}
 			},
 		)

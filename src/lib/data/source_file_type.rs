@@ -35,12 +35,6 @@ impl From<&PathBuf> for SourceFileType {
     }
 }
 
-impl SourceFileType {
-    pub fn from(path: impl Into<PathBuf>) -> SourceFileType {
-        Self::from(path.into())
-    }
-}
-
 impl IntoLua for SourceFileType {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         let me_str: &str = self.into();

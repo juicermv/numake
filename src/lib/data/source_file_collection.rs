@@ -23,7 +23,7 @@ impl SourceFileCollection {
 		file: impl Into<PathBuf>,
 	) {
 		let pathbuf = file.into();
-		let file_type = SourceFileType::from(pathbuf.clone());
+		let file_type = SourceFileType::from(&pathbuf);
 		match self.files.get(&file_type.clone()) {
 			Some(files) => {
 				let mut files_mut = files.clone();

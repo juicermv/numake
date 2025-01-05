@@ -1,29 +1,22 @@
-use std::{
-	fs,
-	io,
-	path::PathBuf,
-	str::FromStr,
-};
-use bzip2::{Action, Compress, Compression, Decompress};
-use bzip2::read::BzDecoder;
-use bzip2::write::BzEncoder;
-use toml::Table;
 use crate::lib::data::environment::Environment;
 use crate::lib::util::hash_string;
+use bzip2::read::{BzDecoder, BzEncoder};
+use bzip2::{Action, Compress, Compression, Decompress};
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::{fs, io, path::PathBuf, str::FromStr};
+use toml::Table;
 
 #[derive(Clone, Default)]
-pub struct Cache
-{
+pub struct Cache {
 	pub user_values: Table,
 
 	toml: Table,
 	directory: PathBuf,
 }
 
-impl Cache
-{
-	pub fn new(environment: Environment) -> anyhow::Result<Self>
-	{
+impl Cache {
+	pub fn new(environment: Environment) -> anyhow::Result<Self> {
 		let directory = environment.numake_directory.join(".cache");
 		if !directory.exists() {
 			fs::create_dir_all(&directory)?;
@@ -53,43 +46,36 @@ impl Cache
 		&mut self,
 		name: &String,
 		data: T,
-	) -> anyhow::Result<PathBuf>
-	{
+	) -> anyhow::Result<PathBuf> {
 		let file_path = self.directory.join(hash_string(name) + ".file");
-		let mut compressor = Compress::new(Compression::best(), 30);
-		let mut compressed_data:Vec<u8> = Vec::new();
-		compressor.compress(data, &mut compressed_data, Action::Run)?;
-		fs::write(&file_path, compressed_data)?;
-
+		let mut compressor = BzEncoder::new(data.as_ref(), Compression::best());
+		io::copy(&mut compressor, &mut File::create(file_path.clone())?)?;
 		Ok(file_path)
 	}
 
 	pub fn read_file(
 		&mut self,
 		name: &String,
-	) -> anyhow::Result<Vec<u8>>
-	{
+	) -> anyhow::Result<Vec<u8>> {
 		let file_path = self.directory.join(hash_string(name) + ".file");
-		let buffer = fs::read(file_path)?;
-		let mut decompressor = Decompress::new(false);
-		let mut output: Vec<u8> = Vec::new();
-		decompressor.decompress_vec(&buffer, &mut output)?;
-		Ok(output)
+		let mut buf = Vec::new();
+		let mut decoder = BzDecoder::new(File::open(file_path)?);
+		io::copy(&mut decoder, &mut buf)?;
+
+		Ok(buf)
 	}
 
 	pub fn check_file_exists(
 		&mut self,
 		name: &String,
-	) -> bool
-	{
+	) -> bool {
 		self.directory.join(hash_string(name) + ".file").exists()
 	}
 
 	pub fn get_dir(
 		&mut self,
 		name: &String,
-	) -> anyhow::Result<PathBuf>
-	{
+	) -> anyhow::Result<PathBuf> {
 		let dir = self.directory.join(hash_string(name));
 		if !dir.exists() {
 			fs::create_dir_all(&dir)?;
@@ -101,8 +87,7 @@ impl Cache
 	pub fn check_dir_exists(
 		&mut self,
 		name: &String,
-	) -> bool
-	{
+	) -> bool {
 		self.directory.join(hash_string(name)).exists()
 	}
 
@@ -110,8 +95,7 @@ impl Cache
 		&mut self,
 		key: &String,
 		val: toml::Value,
-	) -> anyhow::Result<()>
-	{
+	) -> anyhow::Result<()> {
 		self.toml.insert(hash_string(key), val);
 		Ok(())
 	}
@@ -119,24 +103,21 @@ impl Cache
 	pub fn get_value(
 		&mut self,
 		key: &String,
-	) -> Option<&toml::Value>
-	{
+	) -> Option<&toml::Value> {
 		self.toml.get(&hash_string(key))
 	}
 
 	pub fn pop_value(
 		&mut self,
 		key: &String,
-	)
-	{
+	) {
 		self.toml.remove(&hash_string(key));
 	}
 
 	pub fn check_key_exists(
 		&mut self,
 		key: &String,
-	) -> bool
-	{
+	) -> bool {
 		self.toml.contains_key(&hash_string(key))
 	}
 
@@ -144,8 +125,7 @@ impl Cache
 		&mut self,
 		key: &String,
 		val: toml::Value,
-	) -> anyhow::Result<()>
-	{
+	) -> anyhow::Result<()> {
 		self.user_values.insert(hash_string(key), val);
 		Ok(())
 	}
@@ -153,21 +133,18 @@ impl Cache
 	pub fn get_user_value(
 		&mut self,
 		key: &String,
-	) -> Option<&toml::Value>
-	{
+	) -> Option<&toml::Value> {
 		self.user_values.get(&hash_string(key))
 	}
 
 	pub fn pop_user_value(
 		&mut self,
 		key: &String,
-	)
-	{
+	) {
 		self.user_values.remove(&hash_string(key));
 	}
 
-	pub fn flush(&mut self) -> io::Result<()>
-	{
+	pub fn flush(&mut self) -> io::Result<()> {
 		self.toml.insert(
 			"workspace".to_string(),
 			toml::Value::Table(self.user_values.clone()),

@@ -8,21 +8,23 @@ use crate::lib::compilers::mingw::MinGW;
 use crate::lib::compilers::msvc::MSVC;
 use crate::lib::data::environment::Environment;
 use crate::lib::data::project::Project;
+use crate::lib::runtime::filesystem::Filesystem;
 use crate::lib::runtime::network::Network;
 use crate::lib::runtime::storage::Storage;
 use crate::lib::runtime::task_manager::TaskManager;
-use crate::lib::ui::NumakeUI;
 use crate::lib::util::ui::NumakeUI;
 
 pub mod task_manager;
 pub mod network;
 mod storage;
+mod filesystem;
 
 pub struct Runtime {
     // Tools
     task_manager: task_manager::TaskManager,
     network: network::Network,
     storage: storage::Storage,
+    filesystem: filesystem::Filesystem,
 
     // Compilers
     msvc: msvc::MSVC,
@@ -51,6 +53,7 @@ impl Runtime {
             task_manager: TaskManager::new(),
             network: Network::new(environment.clone(), ui.clone(), cache.clone()),
             storage: Storage::new(cache.clone()),
+            filesystem: Filesystem::new(environment.clone()),
             msvc: MSVC::new(environment.clone(), ui.clone()),
             mingw: MinGW::new(environment.clone(), ui.clone()),
             generic: Generic::new(environment.clone(), ui.clone()),
@@ -62,8 +65,10 @@ impl Runtime {
     }
 
     pub fn execute_script(&mut self, filename: &String) -> LuaResult<()> {
+        let file_size = fs::metadata(filename)?.len();
+        let mut should_compile = self.cache.get_value(filename) != Some(&toml::Value::from(file_size.to_string()));
         let mut chunk: Vec<u8> = Vec::new();
-        let mut should_compile = false;
+        false;
         if self.cache.check_file_exists(filename) {
             match self.cache.read_file(filename) {
                 Ok(content) => { chunk = content },
@@ -75,6 +80,7 @@ impl Runtime {
 
         self.lua.globals().set("Project", Project::default())?;
         self.lua.globals().set("storage", self.storage.clone())?;
+        self.lua.globals().set("filesystem", self.filesystem.clone())?;
         self.lua.globals().set("tasks", self.task_manager.clone())?;
         self.lua.globals().set("network", self.network.clone())?;
         self.lua.globals().set("msvc", self.msvc.clone())?;
@@ -85,7 +91,12 @@ impl Runtime {
             chunk = fs::read(filename)?;
             let compiler = Compiler::new().set_optimization_level(2).set_coverage_level(2);
             chunk = compiler.compile(chunk)?;
-            match self.cache.write_file(filename, &chunk) {
+            match self.cache.write_file(filename, &chunk.clone()) {
+                Ok(_) => (),
+                Err(err) => return Err(mlua::Error::external(err))
+            }
+
+            match self.cache.set_value(filename, toml::Value::from(chunk.len().to_string())) {
                 Ok(_) => (),
                 Err(err) => return Err(mlua::Error::external(err))
             }

@@ -136,8 +136,8 @@ impl UserData for Project {
             Ok(())
 		});
 
-		fields.add_field_method_set("includePaths", |_, this, new_val| {
-			this.include_paths = new_val;
+		fields.add_field_method_set("includePaths", |_, this, new_val: Vec<String>| {
+			this.include_paths = new_val.clone();
 			Ok(())
 		});
 

@@ -5,7 +5,6 @@ use crate::lib::data::source_file_type::SourceFileType;
 use crate::lib::util::error::NuMakeError::{
 	MsvcWindowsOnly, VcNotFound,
 };
-use crate::lib::ui::NumakeUI;
 use crate::lib::util::download_vswhere;
 use anyhow::anyhow;
 use mlua::{prelude::LuaValue, FromLua, Lua, UserData, UserDataMethods, Value};
@@ -20,6 +19,7 @@ use std::{
 	process::{Command, ExitStatus},
 };
 use tempfile::tempdir;
+use crate::lib::util::ui::NumakeUI;
 
 #[derive(Clone, Serialize)]
 pub struct MSVC {
@@ -437,7 +437,7 @@ impl UserData for MSVC {
 		methods.add_method_mut("build", |_,this,project: Project|  {
 			match this.build(&project) {
 				Ok(_) => Ok(()),
-				Err(err) => { Err(mlua::Error::runtime(err))}
+				Err(err) => { Err(mlua::Error::external(err))}
 			}
 		})
 	}

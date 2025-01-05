@@ -9,7 +9,6 @@ use crate::lib::data::project::Project;
 use crate::lib::data::project_language::ProjectLanguage;
 use crate::lib::data::project_type::ProjectType;
 use crate::lib::data::source_file_type::SourceFileType;
-use crate::lib::ui::NumakeUI;
 use anyhow::anyhow;
 use mlua::{
 	prelude::LuaValue, FromLua, Lua, UserData,
@@ -17,6 +16,7 @@ use mlua::{
 };
 use pathdiff::diff_paths;
 use serde::Serialize;
+use crate::lib::util::ui::NumakeUI;
 
 #[derive(Clone, Serialize)]
 pub struct MinGW {
@@ -336,7 +336,7 @@ impl UserData for MinGW {
 			match this.build(&project) {
 				Ok(_) => Ok(()),
 				Err(err) => {
-					Err(mlua::Error::RuntimeError(format!("{:?}", err)))
+					Err(mlua::Error::external(err))
 				}
 			}
 		})
