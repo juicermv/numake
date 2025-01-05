@@ -20,6 +20,8 @@ reqwest = { version = "0.12.5", features = ["blocking"] }
 serde = { version = "1.0.203", features = ["derive"] }
 serde_json = { version = "1.0.117" }
 sha256 = "1.5.0"
+strum = "0.26.3"
+strum_macros = "0.26.4"
 tempfile = { version = "3.10.1" }
 thiserror = "2.0.3"
 toml = { version = "0.8.14" }
