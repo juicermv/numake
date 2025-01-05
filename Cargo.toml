@@ -15,7 +15,7 @@ dialoguer = "0.11.0"
 dunce = { version = "1.0.4" }
 encoding_rs = "0.8.34"
 indicatif = "0.17.8"
-mlua = { version = "0.10.1", features = ["vendored", "luau", "luau-jit"] }
+mlua = { version = "0.10.1", features = ["vendored", "anyhow", "luau-jit"] }
 pathdiff = { version = "0.2.1" }
 reqwest = { version = "0.12.5", features = ["blocking"] }
 serde = { version = "1.0.203", features = ["derive"] }

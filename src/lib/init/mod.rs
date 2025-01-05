@@ -11,38 +11,28 @@ pub struct Init {}
 impl Init {
 	pub fn run() -> LuaResult<()> {
 		let cmd = Self::get_subcommand(&Cli::parse());
-		match Self::init_environment(&cmd) {
-			Ok(env) => match env::set_current_dir(&env.project_directory) {
-				Ok(_) => match Self::init_runtime(&cmd, env.clone()) {
-					Ok(mut runtime) => {
-						runtime.execute_script(
-							&env.project_file
-								.to_str()
-								.unwrap_or("ERROR")
-								.to_string(),
-						)?;
-						match cmd {
-							SubCommands::Build(args) => {
-								runtime.execute_task(&*args.task)
-							}
+		let env = Self::init_environment(&cmd)?;
+		env::set_current_dir(&env.project_directory)?;
+		let mut runtime = Self::init_runtime(&cmd, env.clone())?;
+		runtime.execute_script(
+			&env.project_file
+				.to_str()
+				.unwrap_or("ERROR")
+				.to_string(),
+		)?;
 
-							SubCommands::List(_) => {
-								println!(
-									"Available Tasks: {}",
-									runtime.get_tasks().join(", ")
-								);
-								Ok(())
-							}
-						}
-					}
+		match cmd {
+			SubCommands::Build(args) => {
+				runtime.execute_task(&*args.task)
+			}
 
-					Err(e) => Err(mlua::Error::external(e)),
-				},
-
-				Err(e) => Err(mlua::Error::external(e)),
-			},
-
-			Err(e) => Err(mlua::Error::external(e)),
+			SubCommands::List(_) => {
+				println!(
+					"Available Tasks: {}",
+					runtime.get_tasks().join(", ")
+				);
+				Ok(())
+			}
 		}
 	}
 

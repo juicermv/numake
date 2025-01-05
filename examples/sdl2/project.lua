@@ -9,7 +9,7 @@ sdl2_project = Project (
     { -- Source files
         "main.cpp"
     },
-    {}, -- Asset files
+    nil,
     { -- Includes
         sdl_path_msvc .. "/SDL2-2.30.2/include"
     },
@@ -21,11 +21,11 @@ sdl2_project = Project (
         "SDL2.lib",
         "SDL2main.lib"
     },
-    {}, -- Definitions
-    {}, -- Compiler flags
+    nil,
+    nil,
     { "/SUBSYSTEM:WINDOWS" }, -- Linker flags
-    {}, -- RC Flags
-    {}, -- Windres Flags
+    nil,
+    nil,
     "x64", -- Architecture
     "executable" -- Project Type
 )
@@ -41,7 +41,7 @@ tasks:create("x86 MSVC",
     function()
         sdl2_project.defines = { "MSVC" }
         sdl2_project.arch = "x86"
-        sdl2_project.libPaths = {
+        sdl2_project.lib_paths = {
             sdl_path_msvc .. "/SDL2-2.30.2/lib/x86",
         }
 
@@ -53,8 +53,8 @@ tasks:create("x86 MSVC",
 tasks:create("x86_64-MinGW",
     function()
         sdl2_project.arch = "x86_64"
-        sdl2_project.includePaths = { sdl_path_mingw .. "/x86_64-w64-mingw32/include" }
-        sdl2_project.libPaths = { sdl_path_mingw .. "/x86_64-w64-mingw32/lib" }
+        sdl2_project.include_paths = { sdl_path_mingw .. "/x86_64-w64-mingw32/include" }
+        sdl2_project.lib_paths = { sdl_path_mingw .. "/x86_64-w64-mingw32/lib" }
         sdl2_project.libs = {
             "mingw32",
             "SDL2.dll",
@@ -75,9 +75,9 @@ tasks:create("x86_64-MinGW",
             "uuid"
         }
 
-        sdl2_project.compilerFlags = {"--verbose", "-mwindows", "-static"}
-        sdl2_project.linkerFlags = { "--high-entropy-va", "-subsystem", "windows", "--nxcompat", "-Bstatic"}
-        sdl2_project.assetFiles = { [sdl_path_mingw .. "/x86_64-w64-mingw32/bin/SDL2.dll"] = "SDL2.dll" }
+        sdl2_project.compiler_flags = {"--verbose", "-mwindows", "-static"}
+        sdl2_project.linker_flags = { "--high-entropy-va", "-subsystem", "windows", "--nxcompat", "-Bstatic"}
+        sdl2_project.asset_files = { [sdl_path_mingw .. "/x86_64-w64-mingw32/bin/SDL2.dll"] = "SDL2.dll" }
 
         mingw:build(sdl2_project)
     end
@@ -86,8 +86,8 @@ tasks:create("x86_64-MinGW",
 tasks:create("i686-MinGW",
     function()
         sdl2_project.arch = "i686"
-        sdl2_project.includePaths = { sdl_path_mingw .. "/i686-w64-mingw32/include" }
-        sdl2_project.libPaths = { sdl_path_mingw .. "/i686-w64-mingw32/lib" }
+        sdl2_project.include_paths = { sdl_path_mingw .. "/i686-w64-mingw32/include" }
+        sdl2_project.lib_paths = { sdl_path_mingw .. "/i686-w64-mingw32/lib" }
         sdl2_project.libs = {
             "mingw32",
             "SDL2",
@@ -108,9 +108,9 @@ tasks:create("i686-MinGW",
             "uuid"
         }
 
-        sdl2_project.compilerFlags = {"--verbose", "-mwindows", "-static" }
-        sdl2_project.linkerFlags = { "-subsystem", "windows", "--nxcompat", "-Bstatic"}
-        sdl2_project.assetFiles = { [sdl_path_mingw .. "/i686-w64-mingw32/bin/SDL2.dll"] = "SDL2.dll" }
+        sdl2_project.compiler_flags = {"--verbose", "-mwindows", "-static" }
+        sdl2_project.linker_flags = { "-subsystem", "windows", "--nxcompat", "-Bstatic"}
+        sdl2_project.asset_files = { [sdl_path_mingw .. "/i686-w64-mingw32/bin/SDL2.dll"] = "SDL2.dll" }
 
         mingw:build(sdl2_project)
     end
@@ -118,14 +118,13 @@ tasks:create("i686-MinGW",
 
 sdl2_gcc_project = Project(
     "SDL2 Project GCC",
-    "C++",
+    nil,
     "sdl2_test",
     {
         "main.cpp"
     },
-    {},
-    {},
-    {},
+    nil,
+    nil,
     {
         "SDL2"
     },
@@ -138,7 +137,10 @@ sdl2_gcc_project = Project(
     {
         "--verbose"
     },
-    {},{},"","executable"
+    nil,
+    nil,
+    nil,
+    "executable"
 )
 
 tasks:create("GCC", function()

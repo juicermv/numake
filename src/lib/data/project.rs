@@ -72,31 +72,31 @@ impl Project {
 impl UserData for Project {
 	fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
 		fields.add_field_method_get("name", |_, this| Ok(this.name.clone()));
-		fields.add_field_method_get("projectLanguage", |_, this| Ok(this.language.clone()));
+		fields.add_field_method_get("project_language", |_, this| Ok(this.language.clone()));
 		fields.add_field_method_get("output", |_, this| {
 			Ok(this.output.clone().unwrap_or("out".into()))
 		});
-		fields.add_field_method_get("assetFiles", |_, this| {
+		fields.add_field_method_get("asset_files", |_, this| {
 			Ok(this.asset_files.clone())
 		});
-		fields.add_field_method_get("includePaths", |_, this| {
+		fields.add_field_method_get("include_paths", |_, this| {
 			Ok(this.include_paths.clone())
 		});
-		fields.add_field_method_get("libPaths", |_, this| Ok(this.libs.clone()));
+		fields.add_field_method_get("lib_paths", |_, this| Ok(this.libs.clone()));
 		fields.add_field_method_get("libs", |_, this| Ok(this.libs.clone()));
 		fields.add_field_method_get("defines", |_, this| {
 			Ok(this.defines.clone())
 		});
-		fields.add_field_method_get("compilerFlags", |_, this| {
+		fields.add_field_method_get("compiler_flags", |_, this| {
 			Ok(this.compiler_flags.clone())
 		});
-		fields.add_field_method_get("linkerFlags", |_, this| {
+		fields.add_field_method_get("linker_flags", |_, this| {
 			Ok(this.linker_flags.clone())
 		});
-		fields.add_field_method_get("rcFlags", |_, this| {
+		fields.add_field_method_get("rc_flags", |_, this| {
 			Ok(this.rc_flags.clone())
 		});
-		fields.add_field_method_get("windresFlags", |_, this| {
+		fields.add_field_method_get("windres_flags", |_, this| {
 			Ok(this.windres_flags.clone())
 		});
 		fields.add_field_method_get("arch", |_, this| Ok(this.arch.clone()));
@@ -111,7 +111,7 @@ impl UserData for Project {
 			Ok(())
 		});
 
-		fields.add_field_method_set("projectLanguage", |_, this, new_val| {
+		fields.add_field_method_set("project_language", |_, this, new_val| {
 			this.language = new_val;
 			Ok(())
 		});
@@ -131,17 +131,17 @@ impl UserData for Project {
 			},
 		);
 
-		fields.add_field_method_set("assetFiles", |_, this, new_val: HashMap<String, String>| {
+		fields.add_field_method_set("asset_files", |_, this, new_val: HashMap<String, String>| {
 			this.asset_files = new_val;
             Ok(())
 		});
 
-		fields.add_field_method_set("includePaths", |_, this, new_val: Vec<String>| {
+		fields.add_field_method_set("include_paths", |_, this, new_val: Vec<String>| {
 			this.include_paths = new_val.clone();
 			Ok(())
 		});
 
-		fields.add_field_method_set("libPaths", |_, this, new_val| {
+		fields.add_field_method_set("lib_paths", |_, this, new_val| {
 			this.lib_paths = new_val;
 			Ok(())
 		});
@@ -156,22 +156,22 @@ impl UserData for Project {
 			Ok(())
 		});
 
-		fields.add_field_method_set("compilerFlags", |_, this, new_val| {
+		fields.add_field_method_set("compiler_flags", |_, this, new_val| {
 			this.compiler_flags = new_val;
 			Ok(())
 		});
 
-		fields.add_field_method_set("linkerFlags", |_, this, new_val| {
+		fields.add_field_method_set("linker_flags", |_, this, new_val| {
 			this.linker_flags = new_val;
 			Ok(())
 		});
 
-		fields.add_field_method_set("rcFlags", |_, this, new_val| {
+		fields.add_field_method_set("rc_flags", |_, this, new_val| {
 			this.rc_flags = new_val;
 			Ok(())
 		});
 
-		fields.add_field_method_set("windresFlags", |_, this, new_val| {
+		fields.add_field_method_set("windres_flags", |_, this, new_val| {
 			this.rc_flags = new_val;
 			Ok(())
 		});
@@ -181,7 +181,7 @@ impl UserData for Project {
 			Ok(())
 		});
 
-		fields.add_field_method_set("projectType", |_, this, new_val| {
+		fields.add_field_method_set("project_type", |_, this, new_val| {
 			this.project_type = new_val;
 			Ok(())
 		});
@@ -209,41 +209,41 @@ impl UserData for Project {
 				arch,
 				project_type,
 			): (
-				String,
-				ProjectLanguage,
-				String,
-				Vec<String>,
-				HashMap<String, String>,
-				Vec<String>,
-				Vec<String>,
-				Vec<String>,
-				Vec<String>,
-				Vec<String>,
-				Vec<String>,
-				Vec<String>,
-				Vec<String>,
-				String,
-				ProjectType,
+				Option<String>,
+				Option<ProjectLanguage>,
+				Option<String>,
+				Option<Vec<String>>,
+				Option<HashMap<String, String>>,
+				Option<Vec<String>>,
+				Option<Vec<String>>,
+				Option<Vec<String>>,
+				Option<Vec<String>>,
+				Option<Vec<String>>,
+				Option<Vec<String>>,
+				Option<Vec<String>>,
+				Option<Vec<String>>,
+				Option<String>,
+				Option<ProjectType>,
 			)| {
                 let mut new_proj = Project {
-                    name,
-					language,
-                    output: Some(output),
+                    name: name.unwrap_or_default(),
+					language: language.unwrap_or_default(),
+                    output,
                     source_files: SourceFileCollection::new(),
-                    asset_files,
-                    include_paths,
-                    lib_paths,
-                    libs,
-                    defines,
-                    compiler_flags,
-                    linker_flags,
-                    rc_flags,
-					windres_flags,
-                    arch: Some(arch),
-                    project_type
+                    asset_files: asset_files.unwrap_or_default(),
+                    include_paths: include_paths.unwrap_or_default(),
+                    lib_paths: lib_paths.unwrap_or_default(),
+                    libs: libs.unwrap_or_default(),
+                    defines: defines.unwrap_or_default(),
+                    compiler_flags: compiler_flags.unwrap_or_default(),
+                    linker_flags: linker_flags.unwrap_or_default(),
+                    rc_flags: rc_flags.unwrap_or_default(),
+					windres_flags: windres_flags.unwrap_or_default(),
+                    arch,
+                    project_type: project_type.unwrap_or_default(),
                 };
 
-                for file in source_files {
+                for file in source_files.unwrap_or_default() {
                     new_proj.source_files.insert(dunce::canonicalize(Path::new(&file))?);
                 }
 
