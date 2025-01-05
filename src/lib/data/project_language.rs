@@ -1,4 +1,3 @@
-use crate::lib::data::project_type::ProjectType;
 use mlua::prelude::{LuaResult, LuaValue};
 use mlua::Error::UserDataTypeMismatch;
 use mlua::{FromLua, IntoLua, Lua};

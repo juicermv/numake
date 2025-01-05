@@ -1,7 +1,5 @@
 use crate::lib::data::source_file_type::SourceFileType;
-use mlua::IntoLua;
 use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
 use std::path::PathBuf;
 use strum::IntoEnumIterator;
 

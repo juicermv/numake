@@ -1,20 +1,16 @@
 use crate::lib::data::environment::Environment;
 use crate::lib::data::project::Project;
 use crate::lib::data::project_type::ProjectType;
-use crate::lib::data::source_file_collection::SourceFileCollection;
 use crate::lib::data::source_file_type::SourceFileType;
-use crate::lib::error::NuMakeError::{
-	AddFileIsDirectory, AssetCopyPathOutsideWorkingDirectory, MsvcWindowsOnly,
-	PathOutsideWorkingDirectory, VcNotFound,
+use crate::lib::util::error::NuMakeError::{
+	MsvcWindowsOnly, VcNotFound,
 };
 use crate::lib::ui::NumakeUI;
-use crate::lib::util::{download_vswhere, to_lua_result};
+use crate::lib::util::download_vswhere;
 use anyhow::anyhow;
-use mlua::prelude::LuaError;
-use mlua::{prelude::LuaValue, FromLua, Lua, Table, UserData, UserDataFields, UserDataMethods, Value};
+use mlua::{prelude::LuaValue, FromLua, Lua, UserData, UserDataMethods, Value};
 use pathdiff::diff_paths;
 use serde::Serialize;
-use std::hash::Hash;
 use std::{
 	collections::HashMap,
 	fs,

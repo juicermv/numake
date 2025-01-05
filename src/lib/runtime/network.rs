@@ -1,51 +1,91 @@
+use crate::lib::util::cache::Cache;
 use crate::lib::data::environment::Environment;
 use crate::lib::ui::NumakeUI;
 use crate::lib::util::hash_string;
-use mlua::{IntoLua, UserData, UserDataMethods};
-use std::io::Cursor;
+use mlua::{UserData, UserDataMethods};
 use serde::Serialize;
+use std::io::Cursor;
 use zip::ZipArchive;
-
 
 #[derive(Clone, Serialize)]
 pub struct Network {
 	#[serde(skip)]
-	environment:  Environment,
+	environment: Environment,
 	#[serde(skip)]
-	ui:  NumakeUI,
+	ui: NumakeUI,
+	#[serde(skip)]
+	cache: Cache,
 }
 
 impl Network {
-
-    pub fn new(environment:  Environment, ui:  NumakeUI) -> Network {
-        Network { environment, ui }
-    }
+	pub fn new(
+		environment: Environment,
+		ui: NumakeUI,
+		cache: Cache,
+	) -> Network {
+		Network {
+			environment,
+			ui,
+			cache,
+		}
+	}
 	pub unsafe fn download_zip(
 		&mut self,
 		url: String,
 	) -> anyhow::Result<String> {
-		let response = reqwest::blocking::get(&url)?;
-		let status = response.status();
-		if status.is_success() {
-			let spinner = (self.ui)
-				.spinner("Downloading & extracting archive...".to_string());
-			(self.ui).progress_manager.println((self.ui).format_ok(format!(
-				"Server responded with {}! [{}]",
-				response.status(),
-				&url
-			)))?;
-			let path =
-				(self.environment).numake_directory.join(hash_string(&url));
-
-			ZipArchive::new(Cursor::new(response.bytes()?))?.extract(&path)?;
-			spinner.finish_and_clear();
-			(self.ui).progress_manager.println(
-				(self.ui).format_ok(format!("Done extracting! [{}]", url)),
-			)?;
-
-			Ok(path.to_str().unwrap().to_string())
+		if self.cache.check_dir_exists(&url) {
+			self.ui
+				.progress_manager
+				.println("Archive contents found on disk.")?;
+			Ok(self
+				.cache
+				.get_dir(&url)?
+				.to_str()
+				.unwrap_or("ERROR")?
+				.to_string()?)
 		} else {
-			anyhow::bail!("Server responded with {}! [{}]", status, url)
+			if self.cache.check_file_exists(&url) {
+				let spinner = self.ui.spinner(format!(
+					"Archive found in cache. Extracting... [{}]",
+					&url
+				));
+				ZipArchive::new(Cursor::new(self.cache.read_file(&url)))?
+					.extract(self.cache.get_dir(&url)?)?;
+				self.ui
+					.progress_manager
+					.println(self.ui.format_ok("Done!")?)?;
+				spinner.finish()?;
+			} else {
+				let response = reqwest::blocking::get(&url)?;
+				let status = response.status();
+				if status.is_success() {
+					let spinner = (self.ui).spinner(
+						"Downloading & extracting archive...".to_string(),
+					);
+					(self.ui).progress_manager.println((self.ui).format_ok(
+						format!(
+							"Server responded with {}! [{}]",
+							response.status(),
+							&url
+						),
+					))?;
+					let path = self.cache.get_dir(&url)?;
+
+					let data = response.bytes()?;
+					self.cache.write_file(&url, data.clone())?;
+					ZipArchive::new(Cursor::new(data.clone()))?
+						.extract(&path)?;
+					spinner.finish_and_clear();
+					(self.ui).progress_manager.println(
+						(self.ui)
+							.format_ok(format!("Done extracting! [{}]", url)),
+					)?;
+
+					Ok(path.to_str().unwrap().to_string())
+				} else {
+					anyhow::bail!("Server responded with {}! [{}]", status, url)
+				}
+			}
 		}
 	}
 }

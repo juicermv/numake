@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use mlua::{IntoLua, Lua};
-use mlua::prelude::{LuaResult, LuaString, LuaValue};
+use mlua::prelude::{LuaResult, LuaValue};
 use strum_macros::{EnumIter, IntoStaticStr};
 
 #[derive(Debug, Copy, Clone, EnumIter, Hash, PartialEq, Eq, IntoStaticStr)]

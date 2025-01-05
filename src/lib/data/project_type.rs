@@ -1,9 +1,7 @@
 use mlua::{FromLua, IntoLua, Lua};
 use mlua::Error::UserDataTypeMismatch;
 use mlua::prelude::{LuaResult, LuaValue};
-use mlua::Value::String;
 use strum_macros::IntoStaticStr;
-use crate::lib::data::source_file_type::SourceFileType;
 
 
 #[derive(Debug, Clone, IntoStaticStr, Default)]

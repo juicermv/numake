@@ -1,16 +1,14 @@
 use crate::lib::data::project_type::ProjectType;
 use crate::lib::data::source_file_collection::SourceFileCollection;
-use crate::lib::error::NuMakeError::{
+use crate::lib::util::error::NuMakeError::{
 	AddFileIsDirectory, AssetCopyPathOutsideWorkingDirectory,
-	PathOutsideWorkingDirectory,
 };
 use anyhow::anyhow;
-use mlua::{FromLua, IntoLua, Lua, MetaMethod, Table, UserData, UserDataFields, UserDataMethods, Value};
+use mlua::{FromLua, Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use mlua::prelude::LuaValue;
-use crate::lib::compilers::msvc::MSVC;
 use crate::lib::data::project_language::ProjectLanguage;
 
 #[derive(Debug, Clone, Default)]

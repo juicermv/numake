@@ -4,4 +4,5 @@ use std::path::PathBuf;
 pub struct Environment {
     pub numake_directory: PathBuf,
     pub project_directory: PathBuf,
+    pub project_file: PathBuf,
 }

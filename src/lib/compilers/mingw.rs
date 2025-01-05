@@ -1,5 +1,4 @@
 use std::{
-	collections::HashMap,
 	fs,
 	path::PathBuf,
 	process::{Command, ExitStatus},
@@ -10,20 +9,14 @@ use crate::lib::data::project::Project;
 use crate::lib::data::project_language::ProjectLanguage;
 use crate::lib::data::project_type::ProjectType;
 use crate::lib::data::source_file_type::SourceFileType;
-use crate::lib::error::NuMakeError::{
-	AddFileIsDirectory, AssetCopyPathOutsideWorkingDirectory,
-	PathOutsideWorkingDirectory,
-};
 use crate::lib::ui::NumakeUI;
-use crate::lib::util::{get_gcc_includes, to_lua_result};
 use anyhow::anyhow;
 use mlua::{
-	prelude::LuaValue, FromLua, Lua, Table, UserData, UserDataFields,
+	prelude::LuaValue, FromLua, Lua, UserData,
 	UserDataMethods, Value,
 };
 use pathdiff::diff_paths;
 use serde::Serialize;
-use which::which;
 
 #[derive(Clone, Serialize)]
 pub struct MinGW {

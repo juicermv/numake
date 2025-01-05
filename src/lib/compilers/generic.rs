@@ -1,28 +1,20 @@
 use std::{
-	collections::HashMap,
-	env, fs,
+	fs,
 	path::PathBuf,
 	process::{Command, ExitStatus},
 };
 
-use crate::lib::compilers::mingw::MinGW;
 use crate::lib::data::environment::Environment;
 use crate::lib::data::project::Project;
 use crate::lib::data::source_file_type::SourceFileType;
-use crate::lib::error::NuMakeError::{
-	AddFileIsDirectory, AssetCopyPathOutsideWorkingDirectory,
-	PathOutsideWorkingDirectory, ToolsetCompilerNull, ToolsetLinkerNull,
-};
 use crate::lib::ui::NumakeUI;
-use crate::lib::util::{get_gcc_includes, to_lua_result};
 use anyhow::anyhow;
 use mlua::{
-	prelude::LuaValue, FromLua, Lua, Table, UserData, UserDataFields,
-	UserDataMethods, Value,
+	UserData,
+	UserDataMethods,
 };
 use pathdiff::diff_paths;
 use serde::Serialize;
-use which::which;
 
 #[derive(Clone, Serialize)]
 pub struct Generic {

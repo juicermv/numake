@@ -4,8 +4,11 @@ use std::{
 	path::PathBuf,
 	str::FromStr,
 };
-
+use bzip2::{Action, Compress, Compression, Decompress};
+use bzip2::read::BzDecoder;
+use bzip2::write::BzEncoder;
 use toml::Table;
+use crate::lib::data::environment::Environment;
 use crate::lib::util::hash_string;
 
 #[derive(Clone, Default)]
@@ -19,9 +22,9 @@ pub struct Cache
 
 impl Cache
 {
-	pub fn new(workspace: PathBuf) -> anyhow::Result<Self>
+	pub fn new(environment: Environment) -> anyhow::Result<Self>
 	{
-		let directory = workspace.join("cache");
+		let directory = environment.numake_directory.join(".cache");
 		if !directory.exists() {
 			fs::create_dir_all(&directory)?;
 		}
@@ -53,7 +56,10 @@ impl Cache
 	) -> anyhow::Result<PathBuf>
 	{
 		let file_path = self.directory.join(hash_string(name) + ".file");
-		fs::write(&file_path, data)?;
+		let mut compressor = Compress::new(Compression::best(), 30);
+		let mut compressed_data:Vec<u8> = Vec::new();
+		compressor.compress(data, &mut compressed_data, Action::Run)?;
+		fs::write(&file_path, compressed_data)?;
 
 		Ok(file_path)
 	}
@@ -65,7 +71,10 @@ impl Cache
 	{
 		let file_path = self.directory.join(hash_string(name) + ".file");
 		let buffer = fs::read(file_path)?;
-		Ok(buffer)
+		let mut decompressor = Decompress::new(false);
+		let mut output: Vec<u8> = Vec::new();
+		decompressor.decompress_vec(&buffer, &mut output)?;
+		Ok(output)
 	}
 
 	pub fn check_file_exists(
@@ -129,6 +138,32 @@ impl Cache
 	) -> bool
 	{
 		self.toml.contains_key(&hash_string(key))
+	}
+
+	pub fn set_user_value(
+		&mut self,
+		key: &String,
+		val: toml::Value,
+	) -> anyhow::Result<()>
+	{
+		self.user_values.insert(hash_string(key), val);
+		Ok(())
+	}
+
+	pub fn get_user_value(
+		&mut self,
+		key: &String,
+	) -> Option<&toml::Value>
+	{
+		self.user_values.get(&hash_string(key))
+	}
+
+	pub fn pop_user_value(
+		&mut self,
+		key: &String,
+	)
+	{
+		self.user_values.remove(&hash_string(key));
 	}
 
 	pub fn flush(&mut self) -> io::Result<()>
