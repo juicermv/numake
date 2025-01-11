@@ -109,11 +109,6 @@ impl Runtime {
         }
 
         self.lua.load(chunk).exec()?;
-
-        /*self.task_manager = self.lua.globals().get::<TaskManager>("tasks")?;
-        self.storage = self.lua.globals().get::<Storage>("storage")?;
-
-        self.cache.user_values = self.storage.cache.user_values.clone();*/
         self.cache.flush()?;
 
         Ok(())
