@@ -3,40 +3,30 @@
 /*
 	TODO: Optimization, Refactoring, Error Handling. THIS IS A WIP!
 */
-
+use crate::lib::cli_args::{Cli, SubCommands};
+use crate::lib::workspace::LuaWorkspace;
+use anyhow::anyhow;
 use clap::Parser;
 use console::Term;
 use mlua::Lua;
+use std::fmt;
 
-use crate::{
-	cli_args::{
-		Cli,
-		SubCommands,
-	},
-	workspace::LuaWorkspace,
-};
+mod lib;
 
-mod cache;
-mod cli_args;
-mod error;
-mod targets;
-mod ui;
-mod util;
-mod workspace;
-
-fn run() -> anyhow::Result<()>
-{
+fn run() -> anyhow::Result<()> {
 	let cli = Cli::parse();
 	let lua = Lua::new();
 	lua.enable_jit(true);
-	lua.sandbox(true)?;
-	
+	match lua.sandbox(true) {
+		Err(e) => return Err(anyhow!(e.to_string())),
+		Ok(()) => {}
+	}
+
 	match &cli.command {
 		SubCommands::Build(args) => {
 			let mut proj = LuaWorkspace::new(args)?;
 			proj.process(&lua)?;
 			proj.build()?;
-			
 		}
 
 		SubCommands::Inspect(args) => {
@@ -49,7 +39,7 @@ fn run() -> anyhow::Result<()>
 		SubCommands::List(args) => {
 			let mut proj = LuaWorkspace::new_dummy(args)?;
 			proj.process(&lua)?;
-			println!("\nAvailable targets: {}", proj.list_targets()?);
+			println!("\nAvailable target: {}", proj.list_targets()?);
 		}
 	}
 
@@ -57,25 +47,19 @@ fn run() -> anyhow::Result<()>
 }
 
 #[cfg(not(test))]
-fn main() -> anyhow::Result<()>
-{
+fn main() -> anyhow::Result<()> {
 	let result = run();
 	result
 }
 
 #[cfg(test)]
-mod tests
-{
+mod tests {
+	use crate::lib::cli_args::NuMakeArgs;
+	use crate::lib::workspace::LuaWorkspace;
 	use mlua::Lua;
 
-	use crate::{
-		cli_args::NuMakeArgs,
-		workspace::LuaWorkspace,
-	};
-
 	#[test]
-	fn gcc_build() -> anyhow::Result<()>
-	{
+	fn gcc_build() -> anyhow::Result<()> {
 		let args: NuMakeArgs = NuMakeArgs {
 			target: "gcc".to_string(),
 			toolset_compiler: None,
@@ -97,8 +81,7 @@ mod tests
 	}
 
 	#[test]
-	fn mingw_build() -> anyhow::Result<()>
-	{
+	fn mingw_build() -> anyhow::Result<()> {
 		let args: NuMakeArgs = NuMakeArgs {
 			target: "mingw".to_string(),
 			toolset_compiler: None,
@@ -122,8 +105,7 @@ mod tests
 
 	// Does not at the moment work on GH actions for some unknown reason
 	#[test]
-	fn msvc_build() -> anyhow::Result<()>
-	{
+	fn msvc_build() -> anyhow::Result<()> {
 		let args: NuMakeArgs = NuMakeArgs {
 			target: "msvc".to_string(),
 			toolset_compiler: None,

@@ -12,15 +12,8 @@ use mlua::{
 	Value,
 };
 use serde::Serialize;
-
-use crate::{
-	targets::target::{
-		Target,
-		TargetTrait,
-		VSCodeProperties,
-	},
-	workspace::LuaWorkspace,
-};
+use crate::lib::target::{Target, TargetTrait, VSCodeProperties};
+use crate::lib::workspace::LuaWorkspace;
 
 #[derive(Clone, Serialize)]
 pub struct CustomTarget
@@ -78,7 +71,7 @@ impl TargetTrait for CustomTarget
 
 impl UserData for CustomTarget
 {
-	fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F)
+	fn add_fields<F: UserDataFields<Self>>(fields: &mut F)
 	{
 		fields.add_field_method_set(
 			"sub_targets",
@@ -90,11 +83,11 @@ impl UserData for CustomTarget
 	}
 }
 
-impl<'lua> FromLua<'lua> for CustomTarget
+impl FromLua for CustomTarget
 {
 	fn from_lua(
-		value: LuaValue<'lua>,
-		_: &'lua Lua,
+		value: LuaValue,
+		_: &Lua,
 	) -> mlua::Result<Self>
 	{
 		match value {

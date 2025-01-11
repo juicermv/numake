@@ -1,3 +1,8 @@
+pub mod custom;
+pub mod generic;
+pub mod msvc;
+pub mod mingw;
+
 use std::process::{
 	Command,
 	ExitStatus,
@@ -13,16 +18,11 @@ use serde::{
 	Serialize,
 	Serializer,
 };
-
-use crate::{
-	targets::{
-		custom_target::CustomTarget,
-		generic_target::GenericTarget,
-		mingw_target::MinGWTarget,
-		msvc_target::MSVCTarget,
-	},
-	workspace::LuaWorkspace,
-};
+use crate::lib::target::custom::CustomTarget;
+use crate::lib::target::generic::GenericTarget;
+use crate::lib::target::mingw::MinGWTarget;
+use crate::lib::target::msvc::MSVCTarget;
+use crate::lib::workspace::LuaWorkspace;
 
 #[derive(Serialize, Clone, Default)]
 pub struct VSCodeProperties
@@ -126,12 +126,12 @@ impl TargetTrait for Target
 	}
 }
 
-impl<'lua> IntoLua<'lua> for Target
+impl IntoLua for Target
 {
 	fn into_lua(
 		self,
-		lua: &'lua Lua,
-	) -> mlua::Result<Value<'lua>>
+		lua: &Lua,
+	) -> mlua::Result<Value>
 	{
 		match self {
 			Target::Generic(target) => target.into_lua(lua),
@@ -142,11 +142,11 @@ impl<'lua> IntoLua<'lua> for Target
 	}
 }
 
-impl<'lua> FromLua<'lua> for Target
+impl FromLua for Target
 {
 	fn from_lua(
-		value: Value<'lua>,
-		_: &'lua Lua,
+		value: Value,
+		_: &Lua,
 	) -> mlua::Result<Self>
 	{
 		match value {

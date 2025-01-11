@@ -1,57 +1,30 @@
-use std::{
-	collections::HashMap,
-	fs,
-	io::Cursor,
-	path::PathBuf,
-};
-
 use anyhow::anyhow;
 use mlua::{
-	Compiler,
-	FromLua,
-	Lua,
-	prelude::{
-		LuaError,
-		LuaValue,
-	},
-	UserData,
-	UserDataFields,
-	UserDataMethods,
-	Value,
+	prelude::{LuaError, LuaValue},
+	Compiler, FromLua, Lua, UserData, UserDataFields, UserDataMethods, Value,
 };
 use serde::Serialize;
+use std::ptr::null;
+use std::{collections::HashMap, fs, io::Cursor, path::PathBuf};
 use zip::ZipArchive;
 
-use crate::{
-	cache::Cache,
-	cli_args::{
-		InspectArgs,
-		ListArgs,
-		NuMakeArgs,
-	},
-	error::NUMAKE_ERROR,
-	targets::{
-		custom_target::CustomTarget,
-		generic_target::GenericTarget,
-		mingw_target::MinGWTarget,
-		msvc_target::MSVCTarget,
-		target::{
-			Target,
-			TargetTrait,
-		},
-	},
-	ui::NumakeUI,
-	util::{
-		args_to_map,
-		into_lua_value,
-		into_toml_value,
-		to_lua_result,
-	},
+use crate::lib::cache::Cache;
+use crate::lib::cli_args::{InspectArgs, ListArgs, NuMakeArgs};
+use crate::lib::error::NuMakeError::{
+	PathOutsideWorkingDirectory, TargetNotFound,
+};
+use crate::lib::target::custom::CustomTarget;
+use crate::lib::target::generic::GenericTarget;
+use crate::lib::target::mingw::MinGWTarget;
+use crate::lib::target::msvc::MSVCTarget;
+use crate::lib::target::{Target, TargetTrait};
+use crate::lib::ui::NumakeUI;
+use crate::lib::util::{
+	args_to_map, into_lua_value, into_toml_value, to_lua_result,
 };
 
-#[derive(Clone, Serialize)]
-pub struct LuaWorkspace
-{
+#[derive(Clone, Serialize, Default)]
+pub struct LuaWorkspace {
 	pub(crate) workspace: PathBuf,
 	pub(crate) working_directory: PathBuf, // Should already exist
 
@@ -74,10 +47,8 @@ pub struct LuaWorkspace
 	target: String,
 }
 
-impl UserData for LuaWorkspace
-{
-	fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F)
-	{
+impl UserData for LuaWorkspace {
+	fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
 		fields.add_field_method_get("arguments", |lua, this| {
 			lua.create_table_from(args_to_map(this.arguments.clone()))
 		});
@@ -92,8 +63,7 @@ impl UserData for LuaWorkspace
 		fields.add_field_method_get("arch", |_, _| Ok(std::env::consts::ARCH));
 	}
 
-	fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M)
-	{
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method("create_target", |_, this, name: String| {
 			to_lua_result(GenericTarget::new(
 				name,
@@ -159,7 +129,7 @@ impl UserData for LuaWorkspace
 		methods.add_method("get", |lua, this, key: String| {
 			if this.cache.user_values.contains_key(&key) {
 				Ok(Some(into_lua_value(
-					lua,
+					lua.clone(),
 					this.cache.user_values.get(&key).unwrap(),
 				)?))
 			} else {
@@ -190,16 +160,14 @@ impl UserData for LuaWorkspace
 	}
 }
 
-impl LuaWorkspace
-{
-	pub fn new(args: &NuMakeArgs) -> anyhow::Result<Self>
-	{
+impl LuaWorkspace {
+	pub fn new(args: &NuMakeArgs) -> anyhow::Result<Self> {
 		let workdir = dunce::canonicalize(&args.workdir)?;
 		let workspace = workdir.join(".numake");
 		let file = dunce::canonicalize(workdir.join(&args.file))?;
 
 		if !file.starts_with(&workdir) {
-			Err(anyhow!(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?;
+			Err(anyhow!(PathOutsideWorkingDirectory))?;
 		}
 
 		Ok(LuaWorkspace {
@@ -218,14 +186,13 @@ impl LuaWorkspace
 		})
 	}
 
-	pub fn new_inspect(args: &InspectArgs) -> anyhow::Result<Self>
-	{
+	pub fn new_inspect(args: &InspectArgs) -> anyhow::Result<Self> {
 		let workdir = dunce::canonicalize(&args.workdir)?;
 		let workspace = workdir.join(".numake");
 		let file = dunce::canonicalize(workdir.join(&args.file))?;
 
 		if !file.starts_with(&workdir) {
-			Err(anyhow!(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?;
+			Err(anyhow!(PathOutsideWorkingDirectory))?;
 		}
 
 		Ok(LuaWorkspace {
@@ -244,14 +211,13 @@ impl LuaWorkspace
 		})
 	}
 
-	pub fn new_dummy(args: &ListArgs) -> anyhow::Result<Self>
-	{
+	pub fn new_dummy(args: &ListArgs) -> anyhow::Result<Self> {
 		let workdir = dunce::canonicalize(&args.workdir)?;
 		let workspace = workdir.join(".numake");
 		let file = dunce::canonicalize(workdir.join(&args.file))?;
 
 		if !file.starts_with(&workdir) {
-			Err(anyhow!(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?;
+			Err(anyhow!(PathOutsideWorkingDirectory))?;
 		}
 
 		Ok(LuaWorkspace {
@@ -273,8 +239,7 @@ impl LuaWorkspace
 	pub fn process(
 		&mut self,
 		lua_state: &Lua,
-	) -> anyhow::Result<()>
-	{
+	) -> anyhow::Result<()> {
 		let spinner = self.ui.spinner("Processing script...".to_string());
 		std::env::set_current_dir(&self.working_directory)?;
 
@@ -291,24 +256,29 @@ impl LuaWorkspace
 
 		if !self.file.starts_with(&self.working_directory) {
 			// Throw error if file is outside working directory
-			Err(anyhow!(&NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
+			Err(anyhow!(PathOutsideWorkingDirectory))?
 		}
 
-		lua_state.globals().set("workspace", self.clone())?;
+		match lua_state.globals().set("workspace", self.clone()) {
+			Err(e) => return Err(anyhow!(e.to_string())),
+			Ok(_) => (),
+		};
 
 		// Custom print function
-		lua_state.globals().set(
-			"print",
-			lua_state.create_function_mut(|lua, out: LuaValue| {
-				let workspace =
-					lua.globals().get::<&str, LuaWorkspace>("workspace")?;
-				workspace
-					.ui
-					.progress_manager
-					.println(workspace.ui.format_info(out.to_string()?))?;
-				Ok(())
-			})?,
-		)?;
+		match lua_state.create_function_mut(|lua, out: LuaValue| {
+			let workspace = lua.globals().get::<LuaWorkspace>("workspace")?;
+			workspace
+				.ui
+				.progress_manager
+				.println(workspace.ui.format_info(out.to_string()?))?;
+			Ok(())
+		}) {
+			Err(e) => return Err(anyhow!(e.to_string())),
+			Ok(func) => match lua_state.globals().set("print", func) {
+				Err(e) => return Err(anyhow!(e.to_string())),
+				Ok(_) => (),
+			},
+		}
 
 		// Caching
 		let file_size = self.file.metadata()?.len().to_string();
@@ -324,32 +294,48 @@ impl LuaWorkspace
 		};
 
 		if file_cache_exists && cached_file_size == file_size_toml {
-			lua_state
+			match lua_state
 				.load(self.cache.read_file(file_name)?)
 				.set_name(self.file.file_name().unwrap().to_str().unwrap())
-				.exec()?;
+				.exec()
+			{
+				Err(e) => return Err(anyhow!(e.to_string())),
+				Ok(_) => (),
+			}
 		} else if cached_file_size != file_size_toml || !file_cache_exists {
 			let file_content = fs::read(&self.file)?;
-			lua_state
+			match lua_state
 				.load(&file_content)
 				.set_name(self.file.file_name().unwrap().to_str().unwrap())
-				.exec()?;
+				.exec()
+			{
+				Err(e) => return Err(anyhow!(e.to_string())),
+				Ok(_) => (),
+			}
 
-			self.cache.write_file(
-				file_name,
-				Compiler::new()
-					.set_debug_level(0)
-					.set_optimization_level(2)
-					.set_coverage_level(2)
-					.compile(&file_content),
-			)?;
+			match Compiler::new()
+				.set_debug_level(0)
+				.set_optimization_level(2)
+				.set_coverage_level(2)
+				.compile(&file_content)
+			{
+				Err(e) => return Err(anyhow!(e.to_string())),
+				Ok(bytes) => match self.cache.write_file(file_name, bytes) {
+					Err(e) => return Err(anyhow!(e.to_string())),
+					Ok(_) => (),
+				},
+			}
 
 			self.cache.set_value(file_name, file_size_toml.clone())?;
 		}
 
 		// Read back workspace values from Lua
-		let lua_workspace: LuaWorkspace =
-			lua_state.globals().get("workspace")?;
+		let mut lua_workspace: LuaWorkspace = LuaWorkspace::default();
+		match lua_state.globals().get("workspace") {
+			Err(e) => return Err(anyhow!(e.to_string())),
+			Ok(val) => lua_workspace = val,
+		}
+
 		self.targets = lua_workspace.targets.clone();
 		self.ui.progress_manager = lua_workspace.ui.progress_manager;
 		self.cache.user_values = lua_workspace.cache.user_values;
@@ -373,32 +359,28 @@ impl LuaWorkspace
 		Ok(())
 	}
 
-	pub fn list_targets(&self) -> anyhow::Result<String>
-	{
+	pub fn list_targets(&self) -> anyhow::Result<String> {
 		Ok(self
 			.targets
 			.iter()
-			.map(|(name, target)| {
-				match target {
-					Target::Generic(_) => {
-						format!("\n\t{} [GENERIC]", name)
-					}
-					Target::MSVC(_) => {
-						format!("\n\t{} [MSVC]", name)
-					}
-					Target::MinGW(_) => {
-						format!("\n\t{} [MINGW]", name)
-					}
-					Target::Custom(target) => {
-						format!("\n\t{} [CUSTOM]\n{}", name, target.description)
-					}
+			.map(|(name, target)| match target {
+				Target::Generic(_) => {
+					format!("\n\t{} [GENERIC]", name)
+				}
+				Target::MSVC(_) => {
+					format!("\n\t{} [MSVC]", name)
+				}
+				Target::MinGW(_) => {
+					format!("\n\t{} [MINGW]", name)
+				}
+				Target::Custom(target) => {
+					format!("\n\t{} [CUSTOM]\n{}", name, target.description)
 				}
 			})
 			.collect())
 	}
 
-	pub fn build(&mut self) -> anyhow::Result<()>
-	{
+	pub fn build(&mut self) -> anyhow::Result<()> {
 		let mut result = Ok(());
 		if self.target == "all" || self.target == "." {
 			for (target, _) in self.targets.clone() {
@@ -413,10 +395,9 @@ impl LuaWorkspace
 	fn build_target(
 		&mut self,
 		_target: &String,
-	) -> anyhow::Result<()>
-	{
+	) -> anyhow::Result<()> {
 		if !self.targets.contains_key(_target) {
-			Err(anyhow!(&NUMAKE_ERROR.TARGET_NOT_FOUND))
+			Err(anyhow!(TargetNotFound))
 		} else {
 			let spinner =
 				self.ui.spinner(format!("Building target {}...", _target));
@@ -446,8 +427,7 @@ impl LuaWorkspace
 	fn load(
 		&mut self,
 		path: &String,
-	) -> anyhow::Result<Vec<u8>>
-	{
+	) -> anyhow::Result<Vec<u8>> {
 		let file = self.working_directory.join(path);
 		if file.starts_with(&self.working_directory) && file.exists() {
 			let file_size = file.metadata()?.len().to_string();
@@ -467,28 +447,30 @@ impl LuaWorkspace
 				Ok(self.cache.read_file(file_name)?)
 			} else {
 				let file_content = fs::read(&file)?;
-				let bytes = Compiler::new()
+				match Compiler::new()
 					.set_debug_level(0)
 					.set_optimization_level(2)
 					.set_coverage_level(2)
-					.compile(&file_content);
-
-				self.cache.write_file(file_name, &bytes)?;
-
-				self.cache.set_value(file_name, file_size_toml.clone())?;
-
-				Ok(bytes)
+					.compile(&file_content)
+				{
+					Err(e) => Err(anyhow!(e.to_string())),
+					Ok(bytes) => {
+						self.cache.write_file(file_name, &bytes)?;
+						self.cache
+							.set_value(file_name, file_size_toml.clone())?;
+						Ok(bytes)
+					}
+				}
 			}
 		} else {
-			Err(anyhow!(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))
+			Err(anyhow!(PathOutsideWorkingDirectory))
 		}
 	}
 
 	fn load_url(
 		&mut self,
 		url: &String,
-	) -> anyhow::Result<Vec<u8>>
-	{
+	) -> anyhow::Result<Vec<u8>> {
 		let file_cache_exists: bool = self.cache.check_key_exists(url)
 			&& self.cache.check_file_exists(url)
 			&& self.cache.get_value(url).is_some();
@@ -515,16 +497,19 @@ impl LuaWorkspace
 				let file_content = response.bytes()?;
 
 				self.cache.set_value(url, file_size_toml)?;
-				self.cache.write_file(
-					url,
-					Compiler::new()
-						.set_debug_level(0)
-						.set_optimization_level(2)
-						.set_coverage_level(2)
-						.compile(&file_content),
-				)?;
+				match Compiler::new()
+					.set_debug_level(0)
+					.set_optimization_level(2)
+					.set_coverage_level(2)
+					.compile(&file_content)
+				{
+					Err(e) => Err(anyhow!(e.to_string())),
+					Ok(bytes) => {
+						self.cache.write_file(url, bytes)?;
 
-				Ok(file_content.to_vec())
+						return Ok(file_content.to_vec());
+					}
+				}
 			}
 		}
 	}
@@ -532,8 +517,7 @@ impl LuaWorkspace
 	fn workspace_download_zip(
 		&mut self,
 		url: String,
-	) -> anyhow::Result<String>
-	{
+	) -> anyhow::Result<String> {
 		if self.cache.check_dir_exists(&url) {
 			self.ui
 				.progress_manager
@@ -576,12 +560,11 @@ impl LuaWorkspace
 		path_buf: PathBuf,
 		recursive: bool,
 		filter: &Option<Vec<String>>,
-	) -> anyhow::Result<Vec<PathBuf>>
-	{
+	) -> anyhow::Result<Vec<PathBuf>> {
 		let mut path_vec: Vec<PathBuf> = Vec::new();
 
 		if !path_buf.starts_with(&self.working_directory) {
-			Err(LuaError::runtime(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
+			return Err(anyhow!(PathOutsideWorkingDirectory));
 		}
 
 		for entry in fs::read_dir(path_buf)? {
@@ -613,13 +596,11 @@ impl LuaWorkspace
 	}
 }
 
-impl<'lua> FromLua<'lua> for LuaWorkspace
-{
+impl FromLua for LuaWorkspace {
 	fn from_lua(
-		value: LuaValue<'lua>,
-		_: &'lua Lua,
-	) -> mlua::Result<Self>
-	{
+		value: LuaValue,
+		_: &Lua,
+	) -> mlua::Result<Self> {
 		match value {
 			Value::UserData(user_data) => {
 				if user_data.is::<Self>() {

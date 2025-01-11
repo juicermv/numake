@@ -20,6 +20,9 @@ jobs:
 
     steps:    
       - uses: actions/checkout@v4
+
+      - run: rustup update
+
       - name: Run tests
         run: cargo test gcc_build --verbose -- --nocapture
 

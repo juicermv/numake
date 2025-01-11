@@ -6,20 +6,28 @@ use std::{
 };
 
 use anyhow::anyhow;
-use base32::Alphabet;
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD_NO_PAD;
 use mlua::{
 	Integer,
 	IntoLua,
 	Lua,
 };
 
-pub fn hash_string(val: &String) -> String { base32::encode(Alphabet::Crockford, val.as_bytes()) }
+use sha256::digest;
+
+pub fn hash_string(val: &String) -> String {
+	let mut result = digest(val);
+	result.truncate(16);
+
+	result
+}
 
 // Horror
-pub fn into_lua_value<'lua>(
-	lua: &'lua Lua,
+pub fn into_lua_value(
+	lua: Lua,
 	origin: &toml::Value,
-) -> mlua::Result<mlua::Value<'lua>>
+) -> mlua::Result<mlua::Value>
 {
 	let mut dest: mlua::Value = mlua::Value::Nil;
 	if origin.is_bool() {
@@ -29,9 +37,9 @@ pub fn into_lua_value<'lua>(
 			.as_array()
 			.unwrap()
 			.iter()
-			.map(|val| into_lua_value(lua, val).unwrap_or(mlua::Nil))
+			.map(|val| into_lua_value(lua.clone(), val).unwrap_or(mlua::Nil))
 			.collect::<Vec<mlua::Value>>()
-			.into_lua(lua)?;
+			.into_lua(&lua)?;
 	} else if origin.is_table() {
 		dest = mlua::Value::Table(into_lua_table(
 			lua,
@@ -53,14 +61,14 @@ pub fn into_lua_value<'lua>(
 	Ok(dest)
 }
 
-pub fn into_lua_table<'lua>(
-	lua: &'lua Lua,
+pub fn into_lua_table(
+	lua: Lua,
 	origin: &toml::Table,
-) -> mlua::Result<mlua::Table<'lua>>
+) -> mlua::Result<mlua::Table>
 {
 	let dest: mlua::Table = lua.create_table()?;
 	for (key, val) in origin {
-		dest.set(key.clone(), into_lua_value(lua, val)?)?;
+		dest.set(key.clone(), into_lua_value(lua.clone(), val)?)?;
 	}
 
 	Ok(dest)

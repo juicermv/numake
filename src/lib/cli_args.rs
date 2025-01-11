@@ -20,7 +20,7 @@ pub enum SubCommands
 	Build(NuMakeArgs),
 	/// Output current workspace in JSON format to stdout. For use with external tools. 
 	Inspect(InspectArgs),
-	/// List available targets. 
+	/// List available target.
 	List(ListArgs),
 }
 
@@ -28,7 +28,7 @@ pub enum SubCommands
 pub struct NuMakeArgs
 {
 	#[arg(
-		help = "Target to build. Use 'all' or '*' to build all targets. Use 'numake list' to list available targets."
+		help = "Target to build. Use 'all' or '*' to build all target. Use 'numake list' to list available target."
 	)]
 	pub target: String,
 
@@ -38,14 +38,14 @@ pub struct NuMakeArgs
 	#[arg(
 		long = "compiler",
 		short = 'c',
-		help = "Override target's compiler executable. Has no effect on MSVC targets."
+		help = "Override target's compiler executable. Has no effect on MSVC target."
 	)]
 	pub toolset_compiler: Option<String>,
 
 	#[arg(
 		long = "linker",
 		short = 'l',
-		help = "Override target's linker executable. Has no effect on MSVC targets."
+		help = "Override target's linker executable. Has no effect on MSVC target."
 	)]
 	pub toolset_linker: Option<String>,
 
@@ -76,14 +76,14 @@ pub struct InspectArgs
 	#[arg(
 		long = "compiler",
 		short = 'c',
-		help = "Override target's compiler executable. Has no effect on MSVC targets."
+		help = "Override target's compiler executable. Has no effect on MSVC target."
 	)]
 	pub toolset_compiler: Option<String>,
 
 	#[arg(
 		long = "linker",
 		short = 'l',
-		help = "Override target's linker executable. Has no effect on MSVC targets."
+		help = "Override target's linker executable. Has no effect on MSVC target."
 	)]
 	pub toolset_linker: Option<String>,
 

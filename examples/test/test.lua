@@ -10,7 +10,10 @@ mingw = workspace:create_mingw_target("mingw")
 mingw.arch = "x86_64"
 
 mingw.output = "test.exe"
-mingw.include_paths = {sdl_path .. "/include"}
+mingw.include_paths = {
+    sdl_path .. "/include"
+}
+
 mingw.library_paths = {sdl_path .. "/lib"}
 mingw.libraries = {
     "mingw32",

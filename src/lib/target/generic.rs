@@ -22,20 +22,11 @@ use mlua::{
 use pathdiff::diff_paths;
 use serde::Serialize;
 use which::which;
-
-use crate::{
-	error::NUMAKE_ERROR,
-	targets::target::{
-		TargetTrait,
-		VSCodeProperties,
-	},
-	ui::NumakeUI,
-	util::{
-		get_gcc_includes,
-		to_lua_result,
-	},
-	workspace::LuaWorkspace,
-};
+use crate::lib::error::NuMakeError::{AddFileIsDirectory, AssetCopyPathOutsideWorkingDirectory, PathOutsideWorkingDirectory, ToolsetCompilerNull, ToolsetLinkerNull};
+use crate::lib::target::{TargetTrait, VSCodeProperties};
+use crate::lib::ui::NumakeUI;
+use crate::lib::util::{get_gcc_includes, to_lua_result};
+use crate::lib::workspace::LuaWorkspace;
 
 #[derive(Clone, Serialize)]
 pub struct GenericTarget
@@ -100,13 +91,13 @@ impl GenericTarget
 	) -> anyhow::Result<()>
 	{
 		if !file.starts_with(&self.workdir) {
-			Err(mlua::Error::runtime(NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR))?
+			return Err(anyhow!(PathOutsideWorkingDirectory))
 		}
 
 		if file.is_file() {
 			self.files.push(file.clone());
 		} else {
-			Err(mlua::Error::runtime(NUMAKE_ERROR.ADD_FILE_IS_DIRECTORY))?
+			return Err(anyhow!(AddFileIsDirectory))
 		}
 		Ok(())
 	}
@@ -119,7 +110,7 @@ impl GenericTarget
 		for (key, val) in self.assets.clone() {
 			let copy_path = out_dir.join(val);
 			if !copy_path.starts_with(out_dir) {
-				Err(anyhow!(NUMAKE_ERROR.ASSET_COPY_PATH_OUTSIDE_OUTPUT_DIR))?
+				Err(anyhow!(AssetCopyPathOutsideWorkingDirectory))?
 			} else {
 				fs::copy(key, copy_path)?;
 			}
@@ -174,11 +165,11 @@ impl TargetTrait for GenericTarget
 		};
 
 		if toolset_linker.is_none() {
-			Err(anyhow!(&NUMAKE_ERROR.TOOLSET_LINKER_NULL))?
+			Err(anyhow!(ToolsetLinkerNull))?
 		}
 
 		if toolset_compiler.is_none() {
-			Err(anyhow!(&NUMAKE_ERROR.TOOLSET_LINKER_NULL))?
+			Err(anyhow!(ToolsetCompilerNull))?
 		}
 
 		for file in self.files.clone() {
@@ -330,7 +321,7 @@ impl TargetTrait for GenericTarget
 
 impl UserData for GenericTarget
 {
-	fn add_fields<'lua, F: UserDataFields<'lua, Self>>(fields: &mut F)
+	fn add_fields<F: UserDataFields<Self>>(fields: &mut F)
 	{
 		{
 			fields.add_field_method_get("include_paths", |_, this| {
@@ -508,7 +499,7 @@ impl UserData for GenericTarget
 					let path = dunce::canonicalize(this.workdir.join(key))?; // Will automatically error if path doesn't exist.
 					if !path.starts_with(&this.workdir) {
 						Err(mlua::Error::runtime(
-							NUMAKE_ERROR.PATH_OUTSIDE_WORKING_DIR,
+							PathOutsideWorkingDirectory,
 						))?
 					}
 
@@ -521,11 +512,11 @@ impl UserData for GenericTarget
 	}
 }
 
-impl<'lua> FromLua<'lua> for GenericTarget
+impl FromLua for GenericTarget
 {
 	fn from_lua(
-		value: LuaValue<'lua>,
-		_: &'lua Lua,
+		value: LuaValue,
+		_: &Lua,
 	) -> mlua::Result<Self>
 	{
 		match value {
