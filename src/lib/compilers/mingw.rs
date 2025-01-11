@@ -9,40 +9,48 @@ use crate::lib::data::project::Project;
 use crate::lib::data::project_language::ProjectLanguage;
 use crate::lib::data::project_type::ProjectType;
 use crate::lib::data::source_file_type::SourceFileType;
+use crate::lib::runtime::system::System;
+use crate::lib::ui::UI;
 use anyhow::anyhow;
-use mlua::{
-	prelude::LuaValue, FromLua, Lua, UserData,
-	UserDataMethods, Value,
-};
+use mlua::{prelude::LuaValue, FromLua, Lua, UserData, UserDataMethods, Value};
 use pathdiff::diff_paths;
 use serde::Serialize;
-use crate::lib::util::ui::NumakeUI;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
 pub struct MinGW {
-	#[serde(skip)]
-	environment:  Environment,
-	#[serde(skip)]
-	ui:  NumakeUI,
+	environment: Environment,
+	ui: UI,
+	system: System,
 }
 
 impl MinGW {
 	pub fn new(
-		environment:  Environment,
-		ui:  NumakeUI,
+		environment: Environment,
+		ui: UI,
+		system: System,
 	) -> Self {
-		MinGW { environment, ui }
+		MinGW {
+			environment,
+			ui,
+			system,
+		}
 	}
 
-	 fn compile_step(
-		&self,
+	fn compile_step(
+		&mut self,
 		project: &Project,
 		obj_dir: &PathBuf,
 		mingw: &String,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()> {
+		let source_files = project.source_files.get(&SourceFileType::Code);
+		let progress = self.ui.create_bar(source_files.len() as u64);
 		// COMPILATION STEP
-		for file in project.source_files.get(&SourceFileType::Code) {
+		for file in source_files {
+			progress.inc(1);
+			progress.set_message(
+				"Compiling... ".to_string() + file.to_str().unwrap(),
+			);
 			let mut compiler = Command::new(
 				mingw.clone()
 					+ match project.language {
@@ -84,26 +92,35 @@ impl MinGW {
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			self.execute(
+			self.system.execute(
 				compiler
 					.args(&compiler_args)
 					.current_dir(&(self.environment).project_directory),
 			)?;
 		}
 
+		self.ui.remove_bar(progress);
+
 		Ok(())
 	}
 
-	 fn resource_step(
-		&self,
+	fn resource_step(
+		&mut self,
 		project: &Project,
 		mingw: &String,
 		res_dir: &PathBuf,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()> {
+		let resource_files =
+			project.source_files.get(&SourceFileType::Resource);
+		let progress = self.ui.create_bar(resource_files.len() as u64);
 		// RESOURCE FILE HANDLING
-		for resource_file in project.source_files.get(&SourceFileType::Resource)
-		{
+		for resource_file in resource_files {
+			progress.inc(1);
+			progress.set_message(
+				"Compiling Resources... ".to_string()
+					+ resource_file.to_str().unwrap(),
+			);
 			let mut resource_compiler = Command::new(mingw.clone() + "windres");
 
 			let coff_file = res_dir.join(
@@ -138,7 +155,7 @@ impl MinGW {
 			res_compiler_args
 				.push(format!("-o{}", coff_file.to_str().unwrap()));
 
-			self.execute(
+			self.system.execute(
 				resource_compiler
 					.args(&res_compiler_args)
 					.current_dir(&(self.environment).project_directory),
@@ -147,17 +164,20 @@ impl MinGW {
 			o_files.push(coff_file.to_str().unwrap().to_string());
 		}
 
+		self.ui.remove_bar(progress);
+
 		Ok(())
 	}
 
-	 fn linking_step(
-		&self,
+	fn linking_step(
+		&mut self,
 		project: &Project,
 		out_dir: &PathBuf,
 		mingw: &String,
 		output: &String,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()> {
+		let spinner = self.ui.create_spinner("Linking...");
 		match project.project_type {
 			ProjectType::StaticLibrary => {
 				let mut linker = Command::new(mingw.clone() + "ar");
@@ -178,7 +198,7 @@ impl MinGW {
 					linker_args.push(def_file.to_str().unwrap().to_string());
 				}
 
-				self.execute(
+				self.system.execute(
 					linker
 						.args(&linker_args)
 						.current_dir(&(self.environment).project_directory),
@@ -225,7 +245,7 @@ impl MinGW {
 					output
 				));
 
-				self.execute(
+				self.system.execute(
 					linker
 						.args(&linker_args)
 						.current_dir(&(self.environment).project_directory),
@@ -233,11 +253,13 @@ impl MinGW {
 			}
 		}
 
+		self.ui.remove_bar(spinner);
+
 		Ok(())
 	}
 
-	 fn build(
-		&self,
+	fn build(
+		&mut self,
 		project: &Project,
 	) -> anyhow::Result<()> {
 		let obj_dir: PathBuf = (self.environment)
@@ -284,61 +306,15 @@ impl MinGW {
 
 		Ok(())
 	}
-
-	 fn execute(
-		&self,
-		cmd: &mut Command,
-	) -> anyhow::Result<ExitStatus> {
-		let result = cmd.output();
-		if result.is_err() {
-			let err = result.err().unwrap();
-			Err(anyhow!(format!(
-				"Error trying to execute {}! {}",
-				cmd.get_program().to_str().unwrap(),
-				err
-			)))
-		} else {
-			let output = result.ok().unwrap();
-			let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-			if output.status.success() {
-				if !stderr.is_empty() {
-					(self.ui)
-						.progress_manager
-						.println((self.ui).format_warn(stderr.clone()))?;
-				}
-
-				(self.ui).progress_manager.println((self.ui).format_ok(
-					format!(
-						"{} exited with {}",
-						cmd.get_program().to_str().unwrap(),
-						output.status
-					),
-				))?;
-				Ok(output.status)
-			} else {
-				(self.ui).progress_manager.println((self.ui).format_err(
-					format!(
-						"{} exited with {}",
-						cmd.get_program().to_str().unwrap(),
-						output.status
-					),
-				))?;
-				Err(anyhow!(stderr))
-			}
-		}
-	}
 }
 
 impl UserData for MinGW {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-		methods.add_method_mut("build", |_, this, project: Project|  {
-			match this.build(&project) {
-				Ok(_) => Ok(()),
-				Err(err) => {
-					Err(mlua::Error::external(err))
-				}
-			}
+		methods.add_method_mut("build", |_, this, project: Project| match this
+			.build(&project)
+		{
+			Ok(_) => Ok(()),
+			Err(err) => Err(mlua::Error::external(err)),
 		})
 	}
 }

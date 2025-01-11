@@ -3,14 +3,15 @@ use crate::lib::util::hash_string;
 use bzip2::read::{BzDecoder, BzEncoder};
 use bzip2::Compression;
 use std::fs::File;
+use std::sync::{Arc, Mutex};
 use std::{fs, io, path::PathBuf, str::FromStr};
 use toml::Table;
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct Cache {
-	pub user_values: Table,
+	user_values: Arc<Mutex<Table>>,
 
-	toml: Table,
+	toml: Arc<Mutex<Table>>,
 	directory: PathBuf,
 }
 
@@ -35,8 +36,8 @@ impl Cache {
 		}
 
 		Ok(Cache {
-			toml: table,
-			user_values,
+			toml: Arc::new(Mutex::new(table)),
+			user_values: Arc::new(Mutex::new(user_values)),
 			directory,
 		})
 	}
@@ -95,29 +96,32 @@ impl Cache {
 		key: &String,
 		val: toml::Value,
 	) -> anyhow::Result<()> {
-		self.toml.insert(hash_string(key), val);
+		(*self.toml.lock().unwrap()).insert(hash_string(key), val);
 		Ok(())
 	}
 
 	pub fn get_value(
 		&mut self,
 		key: &String,
-	) -> Option<&toml::Value> {
-		self.toml.get(&hash_string(key))
+	) -> Option<toml::Value> {
+		match (*self.toml.lock().unwrap()).get(&hash_string(key)) {
+			Some(v) => Some(v.clone()),
+			None => None,
+		}
 	}
 
 	pub fn pop_value(
 		&mut self,
 		key: &String,
 	) {
-		self.toml.remove(&hash_string(key));
+		(*self.toml.lock().unwrap()).remove(&hash_string(key));
 	}
 
 	pub fn check_key_exists(
 		&mut self,
 		key: &String,
 	) -> bool {
-		self.toml.contains_key(&hash_string(key))
+		(*self.toml.lock().unwrap()).contains_key(&hash_string(key))
 	}
 
 	pub fn set_user_value(
@@ -125,29 +129,42 @@ impl Cache {
 		key: &String,
 		val: toml::Value,
 	) -> anyhow::Result<()> {
-		self.user_values.insert(hash_string(key), val);
+		(*self.user_values.lock().unwrap()).insert(hash_string(key), val);
 		Ok(())
 	}
 
 	pub fn get_user_value(
 		&mut self,
 		key: &String,
-	) -> Option<&toml::Value> {
-		self.user_values.get(&hash_string(key))
+	) -> Option<toml::Value> {
+		match (*self.user_values.lock().unwrap()).get(&hash_string(key)) {
+			Some(v) => Some(v.clone()),
+			None => None,
+		}
 	}
 
 	pub fn pop_user_value(
 		&mut self,
 		key: &String,
 	) {
-		self.user_values.remove(&hash_string(key));
+		(*self.user_values.lock().unwrap()).remove(&hash_string(key));
 	}
 
 	pub fn flush(&mut self) -> io::Result<()> {
-		self.toml.insert(
+		(*self.toml.lock().unwrap()).insert(
 			"workspace".to_string(),
-			toml::Value::Table(self.user_values.clone()),
+			toml::Value::Table((*self.user_values.lock().unwrap()).clone()),
 		);
-		fs::write(self.directory.join("cache.toml"), self.toml.to_string())
+		fs::write(self.directory.join("cache.toml"), (*self.toml.lock().unwrap()).to_string())
+	}
+}
+
+impl Clone for Cache {
+	fn clone(&self) -> Self {
+		Cache {
+			user_values: Arc::clone(&self.user_values),
+			toml: Arc::clone(&self.toml),
+			directory: self.directory.clone(),
+		}
 	}
 }

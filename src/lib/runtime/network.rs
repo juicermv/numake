@@ -1,25 +1,23 @@
-use crate::lib::util::cache::Cache;
 use crate::lib::data::environment::Environment;
+use crate::lib::ui::UI;
+use crate::lib::util::cache::Cache;
 use mlua::{UserData, UserDataMethods};
 use serde::Serialize;
 use std::io::Cursor;
+use std::sync::{Arc, Mutex};
 use zip::ZipArchive;
-use crate::lib::util::ui::NumakeUI;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
 pub struct Network {
-	#[serde(skip)]
 	environment: Environment,
-	#[serde(skip)]
-	ui: NumakeUI,
-	#[serde(skip)]
+	ui: UI,
 	cache: Cache,
 }
 
 impl Network {
 	pub fn new(
 		environment: Environment,
-		ui: NumakeUI,
+		ui: UI,
 		cache: Cache,
 	) -> Network {
 		Network {
@@ -33,9 +31,7 @@ impl Network {
 		url: String,
 	) -> anyhow::Result<String> {
 		if self.cache.check_dir_exists(&url) {
-			self.ui
-				.progress_manager
-				.println(self.ui.format_ok("Archive contents found on disk.".to_string()))?;
+			self.ui.println("Archive contents found on disk.");
 			Ok(self
 				.cache
 				.get_dir(&url)?
@@ -44,32 +40,33 @@ impl Network {
 				.to_string())
 		} else {
 			if self.cache.check_file_exists(&url) {
-				let spinner = self.ui.spinner(self.ui.format_info(format!(
+				let spinner = self.ui.create_spinner(format!(
 					"Archive found in cache. Extracting... [{}]",
 					&url
-				)));
+				));
 				ZipArchive::new(Cursor::new(self.cache.read_file(&url)?))?
 					.extract(self.cache.get_dir(&url)?)?;
-				self.ui
-					.progress_manager
-					.println(self.ui.format_ok("Done!".to_string()))?;
+				self.ui.println("Done!");
 				spinner.finish();
 
-				Ok(self.cache.get_dir(&url)?.to_str().unwrap_or("ERROR").to_string())
+				Ok(self
+					.cache
+					.get_dir(&url)?
+					.to_str()
+					.unwrap_or("ERROR")
+					.to_string())
 			} else {
 				let response = reqwest::blocking::get(&url)?;
 				let status = response.status();
 				if status.is_success() {
-					let spinner = (self.ui).spinner(
-						"Downloading & extracting archive...".to_string(),
-					);
-					(self.ui).progress_manager.println((self.ui).format_ok(
-						format!(
-							"Server responded with {}! [{}]",
-							response.status(),
-							&url
-						),
-					))?;
+					let spinner = self
+						.ui
+						.create_spinner("Downloading & extracting archive...");
+					self.ui.println(format!(
+						"Server responded with {}! [{}]",
+						response.status(),
+						&url
+					));
 					let path = self.cache.get_dir(&url)?;
 
 					let data = response.bytes()?;
@@ -77,10 +74,7 @@ impl Network {
 					ZipArchive::new(Cursor::new(data.clone()))?
 						.extract(&path)?;
 					spinner.finish_and_clear();
-					(self.ui).progress_manager.println(
-						(self.ui)
-							.format_ok(format!("Done extracting! [{}]", url)),
-					)?;
+					self.ui.println(format!("Done extracting! [{}]", url));
 
 					Ok(path.to_str().unwrap().to_string())
 				} else {

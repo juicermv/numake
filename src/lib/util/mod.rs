@@ -14,7 +14,6 @@ use mlua::{
 
 use sha256::digest;
 
-pub mod ui;
 pub mod cache;
 pub mod error;
 

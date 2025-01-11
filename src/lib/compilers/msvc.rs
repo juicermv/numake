@@ -2,10 +2,10 @@ use crate::lib::data::environment::Environment;
 use crate::lib::data::project::Project;
 use crate::lib::data::project_type::ProjectType;
 use crate::lib::data::source_file_type::SourceFileType;
-use crate::lib::util::error::NuMakeError::{
-	MsvcWindowsOnly, VcNotFound,
-};
+use crate::lib::runtime::system::System;
+use crate::lib::ui::UI;
 use crate::lib::util::download_vswhere;
+use crate::lib::util::error::NuMakeError::{MsvcWindowsOnly, VcNotFound};
 use anyhow::anyhow;
 use mlua::{prelude::LuaValue, FromLua, Lua, UserData, UserDataMethods, Value};
 use pathdiff::diff_paths;
@@ -19,32 +19,35 @@ use std::{
 	process::{Command, ExitStatus},
 };
 use tempfile::tempdir;
-use crate::lib::util::ui::NumakeUI;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
 pub struct MSVC {
-	#[serde(skip)]
-	environment:  Environment,
-	#[serde(skip)]
-	ui:  NumakeUI,
+	environment: Environment,
+	ui: UI,
+	system: System,
 }
 
 impl MSVC {
 	pub fn new(
-		environment:  Environment,
-		ui:  NumakeUI,
+		environment: Environment,
+		ui: UI,
+		system: System,
 	) -> Self {
-		MSVC { environment, ui }
+		MSVC {
+			environment,
+			ui,
+			system,
+		}
 	}
 
-	 fn setup_msvc(
+	fn setup_msvc(
 		&self,
 		arch: Option<String>,
 		platform_type: Option<String>,
 		winsdk_version: Option<String>,
 	) -> anyhow::Result<HashMap<String, String>> {
-		let vswhere_path = (self.environment).numake_directory
-			.join("vswhere.exe");
+		let vswhere_path =
+			(self.environment).numake_directory.join("vswhere.exe");
 		if !vswhere_path.exists() {
 			download_vswhere(&vswhere_path)?;
 		}
@@ -88,7 +91,7 @@ impl MSVC {
 			writeln!(&bat_file, "set > {}", env_path.to_str().unwrap())?;
 			bat_file.flush()?;
 
-			self.execute(Command::new("cmd").args([
+			self.system.msvc_execute(Command::new("cmd").args([
 				"/C",
 				"@call",
 				bat_path.to_str().unwrap(),
@@ -115,16 +118,22 @@ impl MSVC {
 		}
 	}
 
-	 fn compilation_step(
-		&self,
+	fn compilation_step(
+		&mut self,
 		project: &Project,
 		working_directory: &PathBuf,
 		obj_dir: &PathBuf,
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()> {
+		let source_files = project.source_files.get(&SourceFileType::Code);
+		let progress = self.ui.create_bar(source_files.len() as u64);
 		// COMPILATION STEP
-		for file in project.source_files.get(&SourceFileType::Code) {
+		for file in source_files {
+			progress.inc(1);
+			progress.set_message(
+				"Compiling... ".to_string() + file.to_str().unwrap(),
+			);
 			let mut compiler = Command::new("CL");
 
 			let o_file = obj_dir.join(
@@ -160,19 +169,19 @@ impl MSVC {
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			self.execute(
+			self.system.msvc_execute(
 				compiler
 					.envs(msvc_env)
 					.args(&compiler_args)
 					.current_dir(working_directory),
 			)?;
 		}
-
+		self.ui.remove_bar(progress);
 		Ok(())
 	}
 
-	 fn resource_step(
-		&self,
+	fn resource_step(
+		&mut self,
 		project: &Project,
 		working_directory: &PathBuf,
 		obj_dir: &PathBuf,
@@ -180,17 +189,27 @@ impl MSVC {
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()> {
+		let resource_files =
+			project.source_files.get(&SourceFileType::Resource);
+		let progress = self.ui.create_bar(resource_files.len() as u64);
 		// RESOURCE FILE HANDLING
-		for resource_file in project.source_files.get(&SourceFileType::Resource)
-		{
+		for resource_file in resource_files {
+			progress.inc(1);
+			progress.set_message(
+				"Compiling Resources... ".to_string()
+					+ resource_file.to_str().unwrap(),
+			);
 			let mut resource_compiler = Command::new("RC");
 
 			let res_file = res_dir.join(
-				diff_paths(&resource_file, &(self.environment).numake_directory)
-					.unwrap()
-					.to_str()
-					.unwrap()
-					.to_string() + ".res",
+				diff_paths(
+					&resource_file,
+					&(self.environment).numake_directory,
+				)
+				.unwrap()
+				.to_str()
+				.unwrap()
+				.to_string() + ".res",
 			);
 
 			if !res_file.parent().unwrap().exists() {
@@ -213,7 +232,7 @@ impl MSVC {
 			res_compiler_args
 				.push(resource_file.to_str().unwrap_or("ERROR").to_string());
 
-			self.execute(
+			self.system.msvc_execute(
 				resource_compiler
 					.envs(msvc_env)
 					.args(&res_compiler_args)
@@ -224,11 +243,14 @@ impl MSVC {
 			let mut cvtres = Command::new("CVTRES");
 
 			let rbj_file = obj_dir.join(
-				diff_paths(&resource_file, &(self.environment).numake_directory)
-					.unwrap()
-					.to_str()
-					.unwrap()
-					.to_string() + ".rbj",
+				diff_paths(
+					&resource_file,
+					&(self.environment).numake_directory,
+				)
+				.unwrap()
+				.to_str()
+				.unwrap()
+				.to_string() + ".rbj",
 			);
 
 			if !rbj_file.parent().unwrap().exists() {
@@ -246,7 +268,7 @@ impl MSVC {
 
 			cvtres_args.push(res_file.to_str().unwrap_or("ERROR").to_string());
 
-			self.execute(
+			self.system.msvc_execute(
 				cvtres
 					.envs(msvc_env)
 					.args(&cvtres_args)
@@ -254,11 +276,13 @@ impl MSVC {
 			)?;
 		}
 
+		self.ui.remove_bar(progress);
+
 		Ok(())
 	}
 
-	 fn linking_step(
-		&self,
+	fn linking_step(
+		&mut self,
 		project: &Project,
 		output: &String,
 		working_directory: &PathBuf,
@@ -266,6 +290,7 @@ impl MSVC {
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()> {
+		let spinner = self.ui.create_spinner("Linking...");
 		// LINKING STEP
 		let mut linker = Command::new(match project.project_type {
 			ProjectType::StaticLibrary => "LIB",
@@ -299,42 +324,43 @@ impl MSVC {
 
 		linker_args.append(&mut project.libs.clone());
 
-		self.execute(
+		self.system.msvc_execute(
 			linker
 				.args(&linker_args)
 				.envs(msvc_env)
 				.current_dir(working_directory),
 		)?;
 
+		self.ui.remove_bar(spinner);
+
 		Ok(())
 	}
 
 	#[cfg(not(windows))]
-	 fn build(
+	fn build(
 		&self,
-		_: &Project
+		_: &Project,
 	) -> anyhow::Result<()> {
 		Err(anyhow!(MsvcWindowsOnly))
 	}
 
 	#[cfg(windows)]
-	 fn build(
-		&self,
+	fn build(
+		&mut self,
 		project: &Project,
 	) -> anyhow::Result<()> {
-		let obj_dir: PathBuf = (self.environment).numake_directory
+		let obj_dir: PathBuf = (self.environment)
+			.numake_directory
 			.join(format!("obj/{}", project.name));
-		let out_dir: PathBuf = (self.environment).numake_directory
+		let out_dir: PathBuf = (self.environment)
+			.numake_directory
 			.join(format!("out/{}", project.name));
 
-		let res_dir: PathBuf = (self.environment).numake_directory
+		let res_dir: PathBuf = (self.environment)
+			.numake_directory
 			.join(format!("res/{}", project.name));
 
-		let msvc_env = self.setup_msvc(
-			project.arch.clone(),
-			None,
-			None,
-		)?; // TODO Un-None these
+		let msvc_env = self.setup_msvc(project.arch.clone(), None, None)?; // TODO Un-None these
 
 		if !obj_dir.exists() {
 			fs::create_dir_all(&obj_dir)?;
@@ -382,63 +408,15 @@ impl MSVC {
 
 		Ok(())
 	}
-
-	// TODO move this out of here
-	 fn execute(
-		&self,
-		cmd: &mut Command,
-	) -> anyhow::Result<ExitStatus> {
-		let result = cmd.output();
-
-		if result.is_err() {
-			let err = result.err().unwrap();
-			Err(anyhow!(format!(
-				"Error trying to execute {}! {}",
-				cmd.get_program().to_str().unwrap(),
-				err
-			)))
-		} else {
-			let output = result.ok().unwrap();
-			let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-
-			if output.status.success() {
-				(self.ui).progress_manager.println(
-					if stdout.contains(": warning ") {
-						(self.ui).format_warn(stdout.clone())
-					} else {
-						(self.ui).format_ok(stdout.clone())
-					},
-				)?;
-
-				(self.ui).progress_manager.println((self.ui).format_ok(
-					format!(
-						"{} exited with {}",
-						cmd.get_program().to_str().unwrap(),
-						output.status
-					),
-				))?;
-				Ok(output.status)
-			} else {
-				(self.ui).progress_manager.println((self.ui).format_err(
-					format!(
-						"{} exited with {}",
-						cmd.get_program().to_str().unwrap(),
-						output.status
-					),
-				))?;
-				Err(anyhow!(stdout))
-			}
-		}
-	}
 }
 
 impl UserData for MSVC {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-		methods.add_method_mut("build", |_,this,project: Project|  {
-			match this.build(&project) {
-				Ok(_) => Ok(()),
-				Err(err) => { Err(mlua::Error::external(err))}
-			}
+		methods.add_method_mut("build", |_, this, project: Project| match this
+			.build(&project)
+		{
+			Ok(_) => Ok(()),
+			Err(err) => Err(mlua::Error::external(err)),
 		})
 	}
 }

@@ -7,39 +7,47 @@ use std::{
 use crate::lib::data::environment::Environment;
 use crate::lib::data::project::Project;
 use crate::lib::data::source_file_type::SourceFileType;
+use crate::lib::runtime::system::System;
+use crate::lib::ui::UI;
 use anyhow::anyhow;
-use mlua::{
-	UserData,
-	UserDataMethods,
-};
+use mlua::{UserData, UserDataMethods};
 use pathdiff::diff_paths;
 use serde::Serialize;
-use crate::lib::util::ui::NumakeUI;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
 pub struct Generic {
-	#[serde(skip)]
-	environment:  Environment,
-	#[serde(skip)]
-	ui:  NumakeUI,
+	environment: Environment,
+	ui: UI,
+	system: System,
 }
 
 impl Generic {
 	pub fn new(
-		environment:  Environment,
-		ui:  NumakeUI,
+		environment: Environment,
+		ui: UI,
+		system: System,
 	) -> Self {
-		Generic { environment, ui }
+		Generic {
+			environment,
+			ui,
+			system,
+		}
 	}
 
-	unsafe fn compile_step(
-		&self,
+	fn compile_step(
+		&mut self,
 		project: &Project,
 		toolset_compiler: &String,
 		obj_dir: &PathBuf,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()> {
-		for file in project.source_files.get(&SourceFileType::Code) {
+		let source_files = project.source_files.get(&SourceFileType::Code);
+		let progress = self.ui.create_bar(source_files.len() as u64);
+		for file in source_files {
+			progress.inc(1);
+			progress.set_message(
+				"Compiling... ".to_string() + file.to_str().unwrap(),
+			);
 			let mut compiler = Command::new(toolset_compiler);
 
 			let o_file = obj_dir.join(
@@ -75,24 +83,27 @@ impl Generic {
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			self.execute(
+			self.system.execute(
 				compiler
 					.args(&compiler_args)
 					.current_dir(&(self.environment).project_directory),
 			)?;
 		}
 
+		self.ui.remove_bar(progress);
+
 		Ok(())
 	}
 
-	unsafe fn linking_step(
-		&self,
+	fn linking_step(
+		&mut self,
 		project: &Project,
 		toolset_linker: &String,
 		out_dir: &PathBuf,
 		output: &String,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()> {
+		let spinner = self.ui.create_spinner("Linking...");
 		let mut linker = Command::new(toolset_linker);
 		let mut linker_args = Vec::new();
 
@@ -116,17 +127,19 @@ impl Generic {
 			&output
 		));
 
-		self.execute(
+		self.system.execute(
 			linker
 				.args(&linker_args)
 				.current_dir(&(self.environment).project_directory),
 		)?;
 
+		self.ui.remove_bar(spinner);
+
 		Ok(())
 	}
 
-	unsafe fn build(
-		&self,
+	fn build(
+		&mut self,
 		toolset_compiler: &String,
 		toolset_linker: &String,
 		project: &Project,
@@ -161,50 +174,6 @@ impl Generic {
 
 		Ok(())
 	}
-
-	unsafe fn execute(
-		&self,
-		cmd: &mut Command,
-	) -> anyhow::Result<ExitStatus> {
-		let result = cmd.output();
-		if result.is_err() {
-			let err = result.err().unwrap();
-			Err(anyhow!(format!(
-				"Error trying to execute {}! {}",
-				cmd.get_program().to_str().unwrap(),
-				err
-			)))
-		} else {
-			let output = result.ok().unwrap();
-			let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-			if output.status.success() {
-				if !stderr.is_empty() {
-					(self.ui)
-						.progress_manager
-						.println((self.ui).format_warn(stderr.clone()))?;
-				}
-
-				(self.ui).progress_manager.println((self.ui).format_ok(
-					format!(
-						"{} exited with {}",
-						cmd.get_program().to_str().unwrap(),
-						output.status
-					),
-				))?;
-				Ok(output.status)
-			} else {
-				(self.ui).progress_manager.println((self.ui).format_err(
-					format!(
-						"{} exited with {}",
-						cmd.get_program().to_str().unwrap(),
-						output.status
-					),
-				))?;
-				Err(anyhow!(stderr))
-			}
-		}
-	}
 }
 
 impl UserData for Generic {
@@ -213,10 +182,10 @@ impl UserData for Generic {
 			"build",
 			|_,
 			 this,
-			 (project, compiler, linker): (Project, String, String)| unsafe {
+			 (project, compiler, linker): (Project, String, String)| {
 				match this.build(&compiler, &linker, &project) {
 					Ok(_) => Ok(()),
-					Err(err) => Err(mlua::Error::external(err))
+					Err(err) => Err(mlua::Error::external(err)),
 				}
 			},
 		)

@@ -249,7 +249,7 @@ impl UserData for Project {
 
                 Ok(new_proj)
             },
-		)
+		);
 	}
 }
 

@@ -11,13 +11,15 @@ use crate::lib::data::project::Project;
 use crate::lib::runtime::filesystem::Filesystem;
 use crate::lib::runtime::network::Network;
 use crate::lib::runtime::storage::Storage;
+use crate::lib::runtime::system::System;
 use crate::lib::runtime::task_manager::TaskManager;
-use crate::lib::util::ui::NumakeUI;
+use crate::lib::ui::UI;
 
 pub mod task_manager;
 pub mod network;
-mod storage;
-mod filesystem;
+pub mod storage;
+pub mod filesystem;
+pub mod system;
 
 pub struct Runtime {
     // Tools
@@ -25,13 +27,14 @@ pub struct Runtime {
     network: network::Network,
     storage: storage::Storage,
     filesystem: filesystem::Filesystem,
+    system: system::System,
 
     // Compilers
     msvc: msvc::MSVC,
     mingw: mingw::MinGW,
     generic: generic::Generic,
 
-    ui: NumakeUI,
+    ui: UI,
     cache: Cache,
     environment: Environment,
 
@@ -43,20 +46,23 @@ impl Runtime {
         environment: Environment,
         quiet: bool,
     ) -> Self {
-        let ui: NumakeUI = NumakeUI::new(quiet);
+        let ui: UI = UI::new(quiet);
         let cache: Cache = match Cache::new(environment.clone()) {
             Ok(cache) => cache,
             Err(err) => panic!("{}", err),
         };
+
+        let system = System::new(ui.clone());
 
         Runtime {
             task_manager: TaskManager::new(),
             network: Network::new(environment.clone(), ui.clone(), cache.clone()),
             storage: Storage::new(cache.clone()),
             filesystem: Filesystem::new(environment.clone()),
-            msvc: MSVC::new(environment.clone(), ui.clone()),
-            mingw: MinGW::new(environment.clone(), ui.clone()),
-            generic: Generic::new(environment.clone(), ui.clone()),
+            msvc: MSVC::new(environment.clone(), ui.clone(), system.clone()),
+            mingw: MinGW::new(environment.clone(), ui.clone(), system.clone()),
+            generic: Generic::new(environment.clone(), ui.clone(), system.clone()),
+            system,
             cache,
             ui,
             environment,
@@ -66,7 +72,7 @@ impl Runtime {
 
     pub fn execute_script(&mut self, filename: &String) -> LuaResult<()> {
         let file_size = fs::metadata(filename)?.len();
-        let mut should_compile = self.cache.get_value(filename) != Some(&toml::Value::from(file_size.to_string()));
+        let mut should_compile = self.cache.get_value(filename) != Some(toml::Value::from(file_size.to_string()));
         let mut chunk: Vec<u8> = Vec::new();
         false;
         if self.cache.check_file_exists(filename) {
@@ -104,10 +110,10 @@ impl Runtime {
 
         self.lua.load(chunk).exec()?;
 
-        self.task_manager = self.lua.globals().get::<TaskManager>("tasks")?;
+        /*self.task_manager = self.lua.globals().get::<TaskManager>("tasks")?;
         self.storage = self.lua.globals().get::<Storage>("storage")?;
 
-        self.cache.user_values = self.storage.cache.user_values.clone();
+        self.cache.user_values = self.storage.cache.user_values.clone();*/
         self.cache.flush()?;
 
         Ok(())

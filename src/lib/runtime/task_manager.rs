@@ -1,16 +1,17 @@
 use mlua::prelude::{LuaFunction, LuaResult, LuaValue};
 use mlua::{FromLua, Lua, UserData, UserDataMethods, Value};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub struct TaskManager {
-	tasks: HashMap<String, LuaFunction>,
+	tasks: Arc<Mutex<HashMap<String, LuaFunction>>>,
 }
 
 impl TaskManager {
 	pub fn new() -> Self {
 		TaskManager {
-			tasks: HashMap::new(),
+			tasks: Arc::new(Mutex::new(HashMap::new())),
 		}
 	}
 
@@ -18,7 +19,7 @@ impl TaskManager {
 		&self,
 		task: &str,
 	) -> LuaResult<()> {
-		match self.tasks.get(task) {
+		match (*self.tasks.lock().unwrap()).get(task) {
 			Some(t) => t.call::<()>(()),
 
 			None => Err(mlua::Error::RuntimeError(format!(
@@ -29,7 +30,7 @@ impl TaskManager {
 	}
 
 	pub fn get_tasks(&self) -> Vec<String> {
-		self.tasks.keys().cloned().collect()
+		(*self.tasks.lock().unwrap()).keys().cloned().collect()
 	}
 }
 
@@ -38,7 +39,7 @@ impl UserData for TaskManager {
 		methods.add_method_mut(
 			"create",
 			|_, this, (name, task): (String, LuaFunction)| {
-				this.tasks.insert(name, task);
+				(*this.tasks.lock().unwrap()).insert(name, task);
 				Ok(())
 			},
 		);
