@@ -1,4 +1,6 @@
 use crate::lib::data::environment::Environment;
+use crate::lib::ui::format::info::Info;
+use crate::lib::ui::format::ok;
 use crate::lib::ui::UI;
 use crate::lib::util::cache::Cache;
 use mlua::{UserData, UserDataMethods};
@@ -31,7 +33,8 @@ impl Network {
 		url: String,
 	) -> anyhow::Result<String> {
 		if self.cache.check_dir_exists(&url) {
-			self.ui.println("Archive contents found on disk.");
+			self.ui
+				.println("Archive contents found on disk.", Info::default());
 			Ok(self
 				.cache
 				.get_dir(&url)?
@@ -46,7 +49,7 @@ impl Network {
 				));
 				ZipArchive::new(Cursor::new(self.cache.read_file(&url)?))?
 					.extract(self.cache.get_dir(&url)?)?;
-				self.ui.println("Done!");
+				self.ui.println("Done!", ok::Ok::default());
 				spinner.finish();
 
 				Ok(self
@@ -62,11 +65,14 @@ impl Network {
 					let spinner = self
 						.ui
 						.create_spinner("Downloading & extracting archive...");
-					self.ui.println(format!(
-						"Server responded with {}! [{}]",
-						response.status(),
-						&url
-					));
+					self.ui.println(
+						format!(
+							"Server responded with {}! [{}]",
+							response.status(),
+							&url
+						),
+						ok::Ok::default(),
+					);
 					let path = self.cache.get_dir(&url)?;
 
 					let data = response.bytes()?;
@@ -74,7 +80,10 @@ impl Network {
 					ZipArchive::new(Cursor::new(data.clone()))?
 						.extract(&path)?;
 					spinner.finish_and_clear();
-					self.ui.println(format!("Done extracting! [{}]", url));
+					self.ui.println(
+						format!("Done extracting! [{}]", url),
+						ok::Ok::default(),
+					);
 
 					Ok(path.to_str().unwrap().to_string())
 				} else {

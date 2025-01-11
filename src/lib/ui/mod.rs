@@ -1,5 +1,8 @@
-use std::borrow::Cow;
+pub mod format;
+
+use crate::lib::ui::format::Format;
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget};
+use std::borrow::Cow;
 use std::fmt::Pointer;
 use std::sync::Arc;
 
@@ -11,12 +14,10 @@ pub struct UI {
 impl UI {
 	pub fn new(quiet: bool) -> UI {
 		UI {
-			bar_manager: MultiProgress::with_draw_target(
-				match quiet {
-					true => ProgressDrawTarget::hidden(),
-					false => ProgressDrawTarget::stderr(),
-				},
-			),
+			bar_manager: MultiProgress::with_draw_target(match quiet {
+				true => ProgressDrawTarget::hidden(),
+				false => ProgressDrawTarget::stderr(),
+			}),
 		}
 	}
 
@@ -27,8 +28,12 @@ impl UI {
 		self.bar_manager.add(ProgressBar::new(length))
 	}
 
-	pub fn create_spinner(&self, message: impl Into<Cow<'static, str>>) -> ProgressBar {
-		self.bar_manager.add(ProgressBar::new_spinner().with_message(message))
+	pub fn create_spinner(
+		&self,
+		message: impl Into<Cow<'static, str>>,
+	) -> ProgressBar {
+		self.bar_manager
+			.add(ProgressBar::new_spinner().with_message(message))
 	}
 
 	pub fn remove_bar(
@@ -41,11 +46,11 @@ impl UI {
 	pub fn println<I: AsRef<str>>(
 		&self,
 		msg: I,
+		formatter: impl Format,
 	) {
-		match self.bar_manager.println(msg) {
+		match self.bar_manager.println(formatter.format(msg)) {
 			Ok(_) => (),
 			Err(_) => (),
 		}
 	}
 }
-

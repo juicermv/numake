@@ -1,5 +1,8 @@
 use crate::lib::runtime::storage::Storage;
-use crate::lib::ui::UI;
+use crate::lib::ui;
+use crate::lib::ui::format::info::Info;
+use crate::lib::ui::format::{error, ok};
+use crate::lib::ui::{format, UI};
 use anyhow::anyhow;
 use mlua::prelude::LuaValue;
 use mlua::{FromLua, Lua, Value};
@@ -33,21 +36,27 @@ impl System {
 
 				if output.status.success() {
 					if !stderr.is_empty() {
-						self.ui.println(stderr.clone());
+						self.ui.println(stderr.clone() + "\n", Info::default());
 					}
 
-					self.ui.println(format!(
-						"{} exited with {}",
-						cmd.get_program().to_str().unwrap(),
-						output.status
-					));
+					self.ui.println(
+						format!(
+							"{} exited with {}",
+							cmd.get_program().to_str().unwrap(),
+							output.status
+						),
+						ok::Ok::default(),
+					);
 					Ok(output.status.code().unwrap_or(0))
 				} else {
-					self.ui.println(format!(
-						"{} exited with {}",
-						cmd.get_program().to_str().unwrap(),
-						output.status
-					));
+					self.ui.println(
+						format!(
+							"{} exited with {}",
+							cmd.get_program().to_str().unwrap(),
+							output.status
+						),
+						error::Error::default(),
+					);
 					Err(mlua::Error::runtime(stderr))
 				}
 			}
@@ -76,20 +85,20 @@ impl System {
 						stdout.clone()
 					} else {
 						stdout.clone()
-					});
+					} + "\n", Info::default());
 
 					self.ui.println(format!(
 						"{} exited with {}",
 						cmd.get_program().to_str().unwrap(),
 						output.status
-					));
+					), ok::Ok::default());
 					Ok(output.status)
 				} else {
 					self.ui.println(format!(
 						"{} exited with {}",
 						cmd.get_program().to_str().unwrap(),
 						output.status
-					));
+					), error::Error::default());
 					Err(anyhow!(stdout))
 				}
 			}
