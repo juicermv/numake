@@ -126,7 +126,7 @@ impl MSVC {
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()> {
 		let source_files = project.source_files.get(&SourceFileType::Code);
-		let progress = self.ui.create_bar(source_files.len() as u64);
+		let progress = self.ui.create_bar(source_files.len() as u64, "Compiling... ");
 		// COMPILATION STEP
 		for file in source_files {
 			progress.inc(1);
@@ -190,7 +190,7 @@ impl MSVC {
 	) -> anyhow::Result<()> {
 		let resource_files =
 			project.source_files.get(&SourceFileType::Resource);
-		let progress = self.ui.create_bar(resource_files.len() as u64);
+		let progress = self.ui.create_bar(resource_files.len() as u64, "Compiling Resources... ");
 		// RESOURCE FILE HANDLING
 		for resource_file in resource_files {
 			progress.inc(1);

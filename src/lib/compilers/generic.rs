@@ -40,7 +40,7 @@ impl Generic {
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()> {
 		let source_files = project.source_files.get(&SourceFileType::Code);
-		let progress = self.ui.create_bar(source_files.len() as u64);
+		let progress = self.ui.create_bar(source_files.len() as u64, "Compiling... ");
 		for file in source_files {
 			progress.inc(1);
 			progress.set_message(

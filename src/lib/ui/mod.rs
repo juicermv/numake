@@ -22,8 +22,10 @@ impl UI {
 	pub fn create_bar(
 		&mut self,
 		length: u64,
+		message: impl Into<Cow<'static, str>>,
 	) -> ProgressBar {
-		self.bar_manager.add(ProgressBar::new(length))
+		self.bar_manager
+			.add(ProgressBar::new(length).with_message(message))
 	}
 
 	pub fn create_spinner(

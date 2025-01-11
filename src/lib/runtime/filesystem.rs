@@ -17,16 +17,37 @@ impl Filesystem {
 		&self,
 		path_buf: PathBuf,
 		recursive: bool,
+		file_filter: Option<Vec<String>>,
 	) -> anyhow::Result<Vec<PathBuf>> {
 		let mut path_vec: Vec<PathBuf> = Vec::new();
 
 		for entry in fs::read_dir(path_buf)? {
 			let path = dunce::canonicalize(entry?.path())?;
 			if path.is_dir() && recursive {
-				path_vec.append(&mut self.walk_dir(path.clone(), true)?.clone())
+				path_vec.append(&mut self.walk_dir(path.clone(), true, file_filter.clone())?.clone())
 			}
 			if path.is_file() {
-				path_vec.push(path.clone());
+				let mut add_file = false;
+				match file_filter {
+					Some(ref filter) => {
+						add_file = filter.contains(
+							&path
+								.extension()
+								.unwrap_or_default()
+								.to_str()
+								.unwrap_or_default()
+								.to_string(),
+						);
+					}
+
+					None => {
+						add_file = true;
+					}
+				}
+
+				if add_file {
+					path_vec.push(path.clone());
+				}
 			}
 		}
 
@@ -38,8 +59,8 @@ impl UserData for Filesystem {
 	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
 		methods.add_method_mut(
 			"walk",
-			|_, this, (path, recursive): (String, bool)| match this
-				.walk_dir(dunce::canonicalize(path)?, recursive)
+			|_, this, (path, recursive, filter): (String, bool, Option<Vec<String>>)| match this
+				.walk_dir(dunce::canonicalize(path)?, recursive, filter)
 			{
 				Ok(paths) => {
 					let ret: Vec<String> = paths
