@@ -348,14 +348,14 @@ impl MSVC {
 		&mut self,
 		project: &Project,
 	) -> anyhow::Result<()> {
-		let obj_dir: PathBuf = (self.environment)
+		let obj_dir: PathBuf = self.environment
 			.numake_directory
 			.join(format!("obj/{}", project.name));
-		let out_dir: PathBuf = (self.environment)
+		let out_dir: PathBuf = self.environment
 			.numake_directory
 			.join(format!("out/{}", project.name));
 
-		let res_dir: PathBuf = (self.environment)
+		let res_dir: PathBuf = self.environment
 			.numake_directory
 			.join(format!("res/{}", project.name));
 
@@ -375,11 +375,11 @@ impl MSVC {
 
 		let mut o_files: Vec<String> = Vec::new();
 
-		let working_directory = &(self.environment).project_directory;
+		let working_directory = &self.environment.project_directory;
 
 		self.compilation_step(
 			project,
-			&working_directory,
+			working_directory,
 			&obj_dir,
 			&msvc_env,
 			&mut o_files,
@@ -387,7 +387,7 @@ impl MSVC {
 
 		self.resource_step(
 			project,
-			&working_directory,
+			working_directory,
 			&obj_dir,
 			&res_dir,
 			&msvc_env,
@@ -397,13 +397,13 @@ impl MSVC {
 		self.linking_step(
 			project,
 			&project.output.clone().unwrap_or("out".to_string()),
-			&working_directory,
+			working_directory,
 			&out_dir,
 			&msvc_env,
 			&mut o_files,
 		)?;
 
-		project.copy_assets(&(self.environment).numake_directory, &out_dir)?;
+		project.copy_assets(&self.environment.numake_directory, &out_dir)?;
 
 		Ok(())
 	}
