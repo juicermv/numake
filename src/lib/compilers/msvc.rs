@@ -375,11 +375,11 @@ impl MSVC {
 
 		let mut o_files: Vec<String> = Vec::new();
 
-		let working_directory = &self.environment.project_directory;
+		let working_directory = self.environment.project_directory.clone();
 
 		self.compilation_step(
 			project,
-			working_directory,
+			&working_directory,
 			&obj_dir,
 			&msvc_env,
 			&mut o_files,
@@ -387,7 +387,7 @@ impl MSVC {
 
 		self.resource_step(
 			project,
-			working_directory,
+			&working_directory,
 			&obj_dir,
 			&res_dir,
 			&msvc_env,
@@ -397,7 +397,7 @@ impl MSVC {
 		self.linking_step(
 			project,
 			&project.output.clone().unwrap_or("out".to_string()),
-			working_directory,
+			&working_directory,
 			&out_dir,
 			&msvc_env,
 			&mut o_files,
