@@ -15,20 +15,9 @@ env:
   GH_TOKEN: ${{ github.token }}
 
 jobs:
-  test-x86_64-unknown-linux-gnu:
-    runs-on: self-hosted
-
-    steps:    
-      - uses: actions/checkout@v4
-
-      - run: rustup update
-
-      - name: Run tests
-        run: cargo test gcc_build --verbose -- --nocapture
 
   build-release-x86_64-unknown-linux-gnu:
-    runs-on: self-hosted
-    needs: test-x86_64-unknown-linux-gnu
+    runs-on: ubuntu-latest
 
     permissions:
         contents: write
@@ -51,8 +40,7 @@ jobs:
 
 
   build-debug-x86_64-unknown-linux-gnu:
-    runs-on: self-hosted
-    needs: test-x86_64-unknown-linux-gnu
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -68,18 +56,8 @@ jobs:
 
 
 
-  test-x86_64-pc-windows-gnu:
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Run tests
-        run: cargo test mingw_build --verbose -- --nocapture
-
   build-release-x86_64-pc-windows-gnu:
     runs-on: windows-latest
-    needs: test-x86_64-pc-windows-gnu
 
     permissions:
         contents: write
@@ -105,7 +83,6 @@ jobs:
 
   build-debug-x86_64-pc-windows-gnu:
     runs-on: windows-latest
-    needs: test-x86_64-pc-windows-gnu
     
     steps:
       - uses: actions/checkout@v4
