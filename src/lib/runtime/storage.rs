@@ -2,7 +2,6 @@ use crate::lib::util::cache::Cache;
 use crate::lib::util::{into_lua_value, into_toml_value};
 use mlua::prelude::LuaValue;
 use mlua::{FromLua, Lua, UserData, UserDataMethods, Value};
-use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub struct Storage {

@@ -1,7 +1,7 @@
 use std::{
 	fs,
 	path::PathBuf,
-	process::{Command, ExitStatus},
+	process::Command,
 };
 
 use crate::lib::data::environment::Environment;
@@ -11,10 +11,8 @@ use crate::lib::data::project_type::ProjectType;
 use crate::lib::data::source_file_type::SourceFileType;
 use crate::lib::runtime::system::System;
 use crate::lib::ui::UI;
-use anyhow::anyhow;
 use mlua::{prelude::LuaValue, FromLua, Lua, UserData, UserDataMethods, Value};
 use pathdiff::diff_paths;
-use serde::Serialize;
 
 #[derive(Clone)]
 pub struct MinGW {

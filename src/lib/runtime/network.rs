@@ -4,9 +4,7 @@ use crate::lib::ui::format::ok;
 use crate::lib::ui::UI;
 use crate::lib::util::cache::Cache;
 use mlua::{UserData, UserDataMethods};
-use serde::Serialize;
 use std::io::Cursor;
-use std::sync::{Arc, Mutex};
 use zip::ZipArchive;
 
 #[derive(Clone)]

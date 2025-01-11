@@ -9,14 +9,13 @@ use crate::lib::util::error::NuMakeError::{MsvcWindowsOnly, VcNotFound};
 use anyhow::anyhow;
 use mlua::{prelude::LuaValue, FromLua, Lua, UserData, UserDataMethods, Value};
 use pathdiff::diff_paths;
-use serde::Serialize;
 use std::{
 	collections::HashMap,
 	fs,
 	fs::File,
 	io::Write,
 	path::PathBuf,
-	process::{Command, ExitStatus},
+	process::Command,
 };
 use tempfile::tempdir;
 

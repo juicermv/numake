@@ -3,8 +3,6 @@ pub mod format;
 use crate::lib::ui::format::Format;
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget};
 use std::borrow::Cow;
-use std::fmt::Pointer;
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct UI {
