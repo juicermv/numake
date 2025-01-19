@@ -6,17 +6,19 @@ use crate::lib::ui::{format, UI};
 use clap::Parser;
 use mlua::prelude::LuaResult;
 use std::env;
+use std::process::ExitCode;
 
 pub struct Init {}
 
 impl Init {
-	pub fn run() {
+	pub fn run() -> ExitCode {
 		let cmd = Self::get_subcommand(&Cli::parse());
 		let ui = Self::init_ui(Self::check_quiet(&cmd));
 		match Self::run_safe(ui.clone(), cmd.clone()) {
-			Ok(_) => {}
+			Ok(_) => { ExitCode::SUCCESS }
 			Err(e) => {
-				ui.println(e.to_string(), format::error::Error::default())
+				ui.println(e.to_string(), format::error::Error::default());
+				ExitCode::FAILURE
 			}
 		}
 	}
