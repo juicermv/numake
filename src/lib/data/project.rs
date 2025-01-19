@@ -114,9 +114,7 @@ impl UserData for Project {
 		fields.add_field_method_set("project_language", |_, this, new_val| {
 			this.language = new_val;
 			Ok(())
-		});
-
-		fields.add_field_method_set("output", |_, this, new_val| {
+		});fields.add_field_method_set("output", |_, this, new_val| {
 			this.output = new_val;
 			Ok(())
 		});

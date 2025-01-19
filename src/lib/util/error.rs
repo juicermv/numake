@@ -18,8 +18,8 @@ pub enum NuMakeError {
 	#[error("Attempted to add_file with a directory path! Use add_dir instead!")]
 	AddFileIsDirectory,
 
-	#[error("Target not found!")]
-	TargetNotFound,
+	#[error("Task not found!")]
+	TaskNotFound,
 
 	#[error("MSVC target can only be compiled on windows!")]
 	MsvcWindowsOnly,

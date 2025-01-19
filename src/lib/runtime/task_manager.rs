@@ -1,3 +1,5 @@
+use crate::lib::util::error::NuMakeError::TaskNotFound;
+use anyhow::anyhow;
 use mlua::prelude::{LuaFunction, LuaResult, LuaValue};
 use mlua::{FromLua, Lua, UserData, UserDataMethods, Value};
 use std::collections::HashMap;
@@ -18,14 +20,14 @@ impl TaskManager {
 	pub fn run(
 		&self,
 		task: &str,
-	) -> LuaResult<()> {
+	) -> anyhow::Result<()> {
 		match (*self.tasks.lock().unwrap()).get(task) {
-			Some(t) => t.call::<()>(()),
+			Some(t) => match t.call::<()>(()) {
+				Ok(_) => Ok(()),
+				Err(e) => Err(anyhow!(e)),
+			},
 
-			None => Err(mlua::Error::RuntimeError(format!(
-				"Task {} not found",
-				task
-			))),
+			None => Err(anyhow!(TaskNotFound)),
 		}
 	}
 

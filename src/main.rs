@@ -10,6 +10,6 @@ mod lib;
 
 
 #[cfg(not(test))]
-fn main() -> LuaResult<()> {
+fn main() {
 	Init::run()
 }

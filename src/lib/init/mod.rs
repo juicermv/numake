@@ -2,6 +2,7 @@ use crate::lib::cli::sub_commands::SubCommands;
 use crate::lib::cli::Cli;
 use crate::lib::data::environment::Environment;
 use crate::lib::runtime::Runtime;
+use crate::lib::ui::{format, UI};
 use clap::Parser;
 use mlua::prelude::LuaResult;
 use std::env;
@@ -9,40 +10,49 @@ use std::env;
 pub struct Init {}
 
 impl Init {
-	pub fn run() -> LuaResult<()> {
+	pub fn run() {
 		let cmd = Self::get_subcommand(&Cli::parse());
+		let ui = Self::init_ui(Self::check_quiet(&cmd));
+		match Self::run_safe(ui.clone(), cmd.clone()) {
+			Ok(_) => {}
+			Err(e) => {
+				ui.println(e.to_string(), format::error::Error::default())
+			}
+		}
+	}
+
+	fn run_safe(
+		ui: UI,
+		cmd: SubCommands,
+	) -> anyhow::Result<()> {
 		let env = Self::init_environment(&cmd)?;
 		env::set_current_dir(&env.project_directory)?;
-		let mut runtime = Self::init_runtime(&cmd, env.clone())?;
+
+		let mut runtime = Self::init_runtime(&ui, env.clone())?;
+
 		runtime.execute_script(
-			&env.project_file
-				.to_str()
-				.unwrap_or("ERROR")
-				.to_string(),
+			&env.project_file.to_str().unwrap_or("ERROR").to_string(),
 		)?;
 
 		match cmd {
-			SubCommands::Build(args) => {
-				runtime.execute_task(&*args.task)
-			}
+			SubCommands::Build(args) => runtime.execute_task(&*args.task),
 
 			SubCommands::List(_) => {
-				println!(
-					"Available Tasks: {}",
-					runtime.get_tasks().join(", ")
-				);
+				println!("Available Tasks: {}", runtime.get_tasks().join(", "));
 				Ok(())
 			}
 		}
 	}
 
 	fn init_runtime(
-		cmd: &SubCommands,
+		ui: &UI,
 		env: Environment,
 	) -> anyhow::Result<Runtime> {
-		let quiet = Self::check_quiet(cmd);
+		Runtime::new(ui.clone(), env)
+	}
 
-		Ok(Runtime::new(env, quiet))
+	fn init_ui(quiet: bool) -> UI {
+		UI::new(quiet)
 	}
 
 	fn get_subcommand(args: &Cli) -> SubCommands {
