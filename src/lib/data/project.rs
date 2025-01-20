@@ -56,8 +56,8 @@ impl Project {
 	) -> anyhow::Result<()> {
 		for (key, val) in &self.asset_files {
 			let original_path =
-				dunce::canonicalize(working_directory.join(Path::new(&key)))?;
-			let copy_path = out_dir.join(Path::new(&val));
+				dunce::canonicalize(working_directory.join(key))?;
+			let copy_path = out_dir.join(val);
 			if !copy_path.starts_with(out_dir) {
 				Err(anyhow!(AssetCopyPathOutsideWorkingDirectory))?
 			} else {

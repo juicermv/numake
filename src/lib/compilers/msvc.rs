@@ -403,7 +403,7 @@ impl MSVC {
 			&mut o_files,
 		)?;
 
-		project.copy_assets(&self.environment.numake_directory, &out_dir)?;
+		project.copy_assets(&self.environment.project_directory, &out_dir)?;
 
 		Ok(())
 	}
