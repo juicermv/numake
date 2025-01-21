@@ -55,4 +55,8 @@ impl SourceFileCollection {
 			}
 		}
 	}
+
+	pub fn clear(&mut self) {
+		self.files.clear();
+	}
 }

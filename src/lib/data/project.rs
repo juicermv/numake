@@ -105,7 +105,7 @@ impl UserData for Project {
 		});
 
 
-		// SETTERS
+		// SETTERS ---------------------------------------------------------------------------------
 		fields.add_field_method_set("name", |_, this, new_val| {
 			this.name = new_val;
 			Ok(())
@@ -120,10 +120,11 @@ impl UserData for Project {
 		});
 
 		fields.add_field_method_set(
-			"sourceFiles",
+			"source_files",
 			|_, this, new_val: Vec<String>| {
+				this.source_files.clear();
 				for path in new_val {
-					this.source_files.insert(dunce::canonicalize(Path::new(&path))?);
+					this.source_files.insert(dunce::canonicalize(&path)?);
 				}
 				Ok(())
 			},
@@ -242,7 +243,7 @@ impl UserData for Project {
                 };
 
                 for file in source_files.unwrap_or_default() {
-                    new_proj.source_files.insert(dunce::canonicalize(Path::new(&file))?);
+                    new_proj.source_files.insert(dunce::canonicalize(&file)?);
                 }
 
                 Ok(new_proj)
