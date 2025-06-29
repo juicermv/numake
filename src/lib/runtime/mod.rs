@@ -59,7 +59,7 @@ impl Runtime {
 			),
 			storage: Storage::new(cache.clone()),
 			filesystem: Filesystem::new(environment.clone()),
-			msvc: MSVC::new(environment.clone(), ui.clone(), system.clone()),
+			msvc: MSVC::new(environment.clone(), cache.clone(), ui.clone(), system.clone()),
 			mingw: MinGW::new(environment.clone(), ui.clone(), system.clone()),
 			generic: Generic::new(
 				environment.clone(),

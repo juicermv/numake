@@ -93,7 +93,7 @@ impl Cache {
 
 	pub fn set_value(
 		&mut self,
-		key: &String,
+		key: &str,
 		val: toml::Value,
 	) -> anyhow::Result<()> {
 		(*self.toml.lock().unwrap()).insert(hash_string(key), val);
@@ -102,7 +102,7 @@ impl Cache {
 
 	pub fn get_value(
 		&mut self,
-		key: &String,
+		key: &str,
 	) -> Option<toml::Value> {
 		match (*self.toml.lock().unwrap()).get(&hash_string(key)) {
 			Some(v) => Some(v.clone()),
