@@ -38,6 +38,7 @@ use crate::lib::{
 		error::NuMakeError::VcNotFound,
 	},
 };
+use crate::lib::util::error::NuMakeError::MsvcWindowsOnly;
 
 #[derive(Clone)]
 pub struct MSVC
