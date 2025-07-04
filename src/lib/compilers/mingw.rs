@@ -3,7 +3,7 @@ use std::{
 	path::PathBuf,
 	process::Command,
 };
-
+use std::collections::{HashMap, HashSet};
 use crate::lib::data::environment::Environment;
 use crate::lib::data::project::Project;
 use crate::lib::data::project_language::ProjectLanguage;
@@ -13,10 +13,12 @@ use crate::lib::runtime::system::System;
 use crate::lib::ui::UI;
 use mlua::{prelude::LuaValue, FromLua, Lua, UserData, UserDataMethods, Value};
 use pathdiff::diff_paths;
+use crate::lib::util::cache::Cache;
 
 #[derive(Clone)]
 pub struct MinGW {
 	environment: Environment,
+	cache: Cache,
 	ui: UI,
 	system: System,
 }
@@ -24,11 +26,13 @@ pub struct MinGW {
 impl MinGW {
 	pub fn new(
 		environment: Environment,
+		cache: Cache,
 		ui: UI,
 		system: System,
 	) -> Self {
 		MinGW {
 			environment,
+			cache,
 			ui,
 			system,
 		}
@@ -42,9 +46,83 @@ impl MinGW {
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()> {
 		let source_files = project.source_files.get(&SourceFileType::Code);
-		let progress = self.ui.create_bar(source_files.len() as u64, "Compiling... ");
+
+		let binding = self
+			.cache
+			.get_value("mingw_cache")
+			.unwrap_or(toml::Value::Array(Vec::new()));
+
+		let binding2: Vec<toml::Value> = Vec::new();
+
+		/*
+		 * We cache the hashes of files that have been previously compiled
+		 * to figure out whether we should compile them again.
+		 */
+		let mut mingw_cache: HashSet<String> = binding
+			.as_array()
+			.unwrap_or(&binding2)
+			.iter()
+			.map(|value| value.as_str().unwrap().to_string())
+			.collect::<HashSet<String>>();
+
+		/*
+         * Hash the contents of every source file once
+         * so we don't have to do it multiple times.
+         */
+		let hashes: HashMap<&PathBuf, String> = source_files
+			.iter()
+			.filter_map(|file| match sha256::try_digest(file) {
+				Ok(digest) => Some((file, digest)),
+				Err(_) => None,
+			})
+			.collect();
+
+		let dirty_files: Vec<&PathBuf> = source_files
+			.iter()
+			.filter(|file| match hashes.get(file) {
+				Some(hash) => {
+					!mingw_cache.contains(hash)
+				}
+
+				None => true,
+			})
+			.collect();
+
+		let clean_hashes: HashSet<String> = source_files
+			.iter()
+			.filter_map(|file| match hashes.get(file) {
+				Some(hash) => {
+					if mingw_cache.contains(hash) {
+						Some(hash.clone())
+					} else {
+						None
+					}
+				}
+
+				None => None,
+			})
+			.collect();
+
+		let progress = self.ui.create_bar(dirty_files.len() as u64, "Compiling... ");
+
+		mingw_cache = clean_hashes;
+
 		// COMPILATION STEP
-		for file in source_files {
+		for file in source_files.clone() {
+			let o_file = obj_dir.join(
+				diff_paths(&file, &(self.environment).project_directory)
+					.unwrap()
+					.to_str()
+					.unwrap()
+					.to_string() + ".o",
+			);
+
+			o_files.push(o_file.to_str().unwrap().to_string());
+
+			if !dirty_files.contains(&&file) {
+				continue;
+			}
+
 			progress.inc(1);
 			progress.set_message(
 				"Compiling... ".to_string() + file.to_str().unwrap(),
@@ -57,13 +135,7 @@ impl MinGW {
 					},
 			);
 
-			let o_file = obj_dir.join(
-				diff_paths(&file, &(self.environment).project_directory)
-					.unwrap()
-					.to_str()
-					.unwrap()
-					.to_string() + ".o",
-			);
+
 
 			if !o_file.parent().unwrap().exists() {
 				fs::create_dir_all(o_file.parent().unwrap())?;
@@ -74,7 +146,7 @@ impl MinGW {
 				format!("-o{}", o_file.to_str().unwrap()),
 			];
 
-			o_files.push(o_file.to_str().unwrap().to_string());
+
 
 			for incl in project.include_paths.clone() {
 				compiler_args.push(format!("-I{incl}"))
@@ -90,14 +162,31 @@ impl MinGW {
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			self.system.execute(
+			match self.system.execute(
 				compiler
 					.args(&compiler_args)
 					.current_dir(&(self.environment).project_directory),
-			)?;
+			) {
+				Ok(status) => {
+					mingw_cache.insert(hashes[&file].clone());
+					Ok(status)
+				}
+
+				Err(err) => Err(err)
+			}?;
 		}
 
 		self.ui.remove_bar(progress);
+
+		let mingw_cache_toml: toml::Value = toml::Value::Array(
+			mingw_cache
+				.iter()
+				.map(|value| toml::Value::String(value.clone()))
+				.collect::<Vec<toml::Value>>(),
+		);
+
+		self.cache.set_value("mingw_cache", mingw_cache_toml)?;
+		self.cache.flush()?;
 
 		Ok(())
 	}
