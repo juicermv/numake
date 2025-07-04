@@ -1,34 +1,57 @@
 use std::{
+	collections::{
+		HashMap,
+		HashSet,
+	},
 	fs,
 	path::PathBuf,
 	process::Command,
 };
 
-use crate::lib::data::environment::Environment;
-use crate::lib::data::project::Project;
-use crate::lib::data::project_language::ProjectLanguage;
-use crate::lib::data::project_type::ProjectType;
-use crate::lib::data::source_file_type::SourceFileType;
-use crate::lib::runtime::system::System;
-use crate::lib::ui::UI;
-use mlua::{prelude::LuaValue, FromLua, Lua, UserData, UserDataMethods, Value};
+use mlua::{
+	prelude::LuaValue,
+	FromLua,
+	Lua,
+	UserData,
+	UserDataMethods,
+	Value,
+};
 use pathdiff::diff_paths;
 
+use crate::lib::{
+	data::{
+		environment::Environment,
+		project::Project,
+		project_language::ProjectLanguage,
+		project_type::ProjectType,
+		source_file_type::SourceFileType,
+	},
+	runtime::system::System,
+	ui::UI,
+	util::cache::Cache,
+};
+
 #[derive(Clone)]
-pub struct MinGW {
+pub struct MinGW
+{
 	environment: Environment,
+	cache: Cache,
 	ui: UI,
 	system: System,
 }
 
-impl MinGW {
+impl MinGW
+{
 	pub fn new(
 		environment: Environment,
+		cache: Cache,
 		ui: UI,
 		system: System,
-	) -> Self {
+	) -> Self
+	{
 		MinGW {
 			environment,
+			cache,
 			ui,
 			system,
 		}
@@ -40,23 +63,78 @@ impl MinGW {
 		obj_dir: &PathBuf,
 		mingw: &String,
 		o_files: &mut Vec<String>,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let source_files = project.source_files.get(&SourceFileType::Code);
-		let progress = self.ui.create_bar(source_files.len() as u64, "Compiling... ");
-		// COMPILATION STEP
-		for file in source_files {
-			progress.inc(1);
-			progress.set_message(
-				"Compiling... ".to_string() + file.to_str().unwrap(),
-			);
-			let mut compiler = Command::new(
-				mingw.clone()
-					+ match project.language {
-						ProjectLanguage::C => "gcc",
-						ProjectLanguage::CPP => "g++",
-					},
-			);
 
+		let binding = self
+			.cache
+			.get_value("mingw_cache")
+			.unwrap_or(toml::Value::Array(Vec::new()));
+
+		let binding2: Vec<toml::Value> = Vec::new();
+
+		/*
+		 * We cache the hashes of files that have been previously compiled
+		 * to figure out whether we should compile them again.
+		 */
+		let mut mingw_cache: HashSet<String> = binding
+			.as_array()
+			.unwrap_or(&binding2)
+			.iter()
+			.map(|value| value.as_str().unwrap().to_string())
+			.collect::<HashSet<String>>();
+
+		/*
+		 * Hash the contents of every source file once
+		 * so we don't have to do it multiple times.
+		 */
+		let hashes: HashMap<&PathBuf, String> = source_files
+			.iter()
+			.filter_map(|file| {
+				match sha256::try_digest(file) {
+					Ok(digest) => Some((file, digest)),
+					Err(_) => None,
+				}
+			})
+			.collect();
+
+		let dirty_files: Vec<&PathBuf> = source_files
+			.iter()
+			.filter(|file| {
+				match hashes.get(file) {
+					Some(hash) => !mingw_cache.contains(hash),
+
+					None => true,
+				}
+			})
+			.collect();
+
+		let clean_hashes: HashSet<String> = source_files
+			.iter()
+			.filter_map(|file| {
+				match hashes.get(file) {
+					Some(hash) => {
+						if mingw_cache.contains(hash) {
+							Some(hash.clone())
+						} else {
+							None
+						}
+					}
+
+					None => None,
+				}
+			})
+			.collect();
+
+		let progress = self
+			.ui
+			.create_bar(dirty_files.len() as u64, "Compiling... ");
+
+		mingw_cache = clean_hashes;
+
+		// COMPILATION STEP
+		for file in source_files.clone() {
 			let o_file = obj_dir.join(
 				diff_paths(&file, &(self.environment).project_directory)
 					.unwrap()
@@ -69,12 +147,28 @@ impl MinGW {
 				fs::create_dir_all(o_file.parent().unwrap())?;
 			}
 
+			o_files.push(o_file.to_str().unwrap().to_string());
+
+			if !dirty_files.contains(&&file) {
+				continue;
+			}
+
+			progress.inc(1);
+			progress.set_message(
+				"Compiling... ".to_string() + file.to_str().unwrap(),
+			);
+			let mut compiler = Command::new(
+				mingw.clone()
+					+ match project.language {
+						ProjectLanguage::C => "gcc",
+						ProjectLanguage::CPP => "g++",
+					},
+			);
+
 			let mut compiler_args = vec![
 				"-c".to_string(),
 				format!("-o{}", o_file.to_str().unwrap()),
 			];
-
-			o_files.push(o_file.to_str().unwrap().to_string());
 
 			for incl in project.include_paths.clone() {
 				compiler_args.push(format!("-I{incl}"))
@@ -90,14 +184,31 @@ impl MinGW {
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			self.system.execute(
+			match self.system.execute(
 				compiler
 					.args(&compiler_args)
 					.current_dir(&(self.environment).project_directory),
-			)?;
+			) {
+				Ok(status) => {
+					mingw_cache.insert(hashes[&file].clone());
+					Ok(status)
+				}
+
+				Err(err) => Err(err),
+			}?;
 		}
 
 		self.ui.remove_bar(progress);
+
+		let mingw_cache_toml: toml::Value = toml::Value::Array(
+			mingw_cache
+				.iter()
+				.map(|value| toml::Value::String(value.clone()))
+				.collect::<Vec<toml::Value>>(),
+		);
+
+		self.cache.set_value("mingw_cache", mingw_cache_toml)?;
+		self.cache.flush()?;
 
 		Ok(())
 	}
@@ -108,10 +219,13 @@ impl MinGW {
 		mingw: &String,
 		res_dir: &PathBuf,
 		o_files: &mut Vec<String>,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let resource_files =
 			project.source_files.get(&SourceFileType::Resource);
-		let progress = self.ui.create_bar(resource_files.len() as u64, "Compiling Resources... ");
+		let progress = self
+			.ui
+			.create_bar(resource_files.len() as u64, "Compiling Resources... ");
 		// RESOURCE FILE HANDLING
 		for resource_file in resource_files {
 			progress.inc(1);
@@ -174,7 +288,8 @@ impl MinGW {
 		mingw: &String,
 		output: &String,
 		o_files: &mut Vec<String>,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let spinner = self.ui.create_spinner("Linking...");
 		match project.project_type {
 			ProjectType::StaticLibrary => {
@@ -259,7 +374,8 @@ impl MinGW {
 	fn build(
 		&mut self,
 		project: &Project,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let obj_dir: PathBuf = (self.environment)
 			.numake_directory
 			.join(format!("obj/{}", &project.name));
@@ -306,22 +422,26 @@ impl MinGW {
 	}
 }
 
-impl UserData for MinGW {
-	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-		methods.add_method_mut("build", |_, this, project: Project| match this
-			.build(&project)
-		{
-			Ok(_) => Ok(()),
-			Err(err) => Err(mlua::Error::external(err)),
+impl UserData for MinGW
+{
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M)
+	{
+		methods.add_method_mut("build", |_, this, project: Project| {
+			match this.build(&project) {
+				Ok(_) => Ok(()),
+				Err(err) => Err(mlua::Error::external(err)),
+			}
 		})
 	}
 }
 
-impl FromLua for MinGW {
+impl FromLua for MinGW
+{
 	fn from_lua(
 		value: LuaValue,
 		_: &Lua,
-	) -> mlua::Result<Self> {
+	) -> mlua::Result<Self>
+	{
 		match value {
 			Value::UserData(user_data) => {
 				if user_data.is::<Self>() {

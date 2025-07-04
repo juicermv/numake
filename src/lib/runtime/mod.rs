@@ -1,20 +1,33 @@
-use crate::lib::compilers::generic::Generic;
-use crate::lib::compilers::mingw::MinGW;
-use crate::lib::compilers::msvc::MSVC;
-use crate::lib::compilers::{generic, mingw, msvc};
-use crate::lib::data::environment::Environment;
-use crate::lib::data::project::Project;
-use crate::lib::runtime::filesystem::Filesystem;
-use crate::lib::runtime::network::Network;
-use crate::lib::runtime::storage::Storage;
-use crate::lib::runtime::system::System;
-use crate::lib::runtime::task_manager::TaskManager;
-use crate::lib::ui::{format, UI};
-use crate::lib::util::cache::Cache;
-use anyhow::anyhow;
-use mlua::prelude::LuaResult;
-use mlua::{Compiler, Lua};
 use std::fs;
+
+use mlua::{
+	Compiler,
+	Lua,
+};
+
+use crate::lib::{
+	compilers::{
+		generic,
+		generic::Generic,
+		mingw,
+		mingw::MinGW,
+		msvc,
+		msvc::MSVC,
+	},
+	data::{
+		environment::Environment,
+		project::Project,
+	},
+	runtime::{
+		filesystem::Filesystem,
+		network::Network,
+		storage::Storage,
+		system::System,
+		task_manager::TaskManager,
+	},
+	ui::UI,
+	util::cache::Cache,
+};
 
 pub mod filesystem;
 pub mod network;
@@ -22,7 +35,8 @@ pub mod storage;
 pub mod system;
 pub mod task_manager;
 
-pub struct Runtime {
+pub struct Runtime
+{
 	// Tools
 	task_manager: task_manager::TaskManager,
 	network: network::Network,
@@ -42,11 +56,13 @@ pub struct Runtime {
 	lua: Lua,
 }
 
-impl Runtime {
+impl Runtime
+{
 	pub fn new(
-        ui: UI,
+		ui: UI,
 		environment: Environment,
-	) -> anyhow::Result<Self>{
+	) -> anyhow::Result<Self>
+	{
 		let cache: Cache = Cache::new(environment.clone())?;
 		let system = System::new(ui.clone());
 
@@ -59,10 +75,21 @@ impl Runtime {
 			),
 			storage: Storage::new(cache.clone()),
 			filesystem: Filesystem::new(environment.clone()),
-			msvc: MSVC::new(environment.clone(), ui.clone(), system.clone()),
-			mingw: MinGW::new(environment.clone(), ui.clone(), system.clone()),
+			msvc: MSVC::new(
+				environment.clone(),
+				cache.clone(),
+				ui.clone(),
+				system.clone(),
+			),
+			mingw: MinGW::new(
+				environment.clone(),
+				cache.clone(),
+				ui.clone(),
+				system.clone(),
+			),
 			generic: Generic::new(
 				environment.clone(),
+				cache.clone(),
 				ui.clone(),
 				system.clone(),
 			),
@@ -77,7 +104,8 @@ impl Runtime {
 	pub(crate) fn execute_script(
 		&mut self,
 		filename: &String,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let file_size = fs::metadata(filename)?.len();
 		let mut should_compile = self.cache.get_value(filename)
 			!= Some(toml::Value::from(file_size.to_string()));
@@ -120,14 +148,13 @@ impl Runtime {
 		Ok(())
 	}
 
-	pub fn get_tasks(&mut self) -> Vec<String> {
-		self.task_manager.get_tasks()
-	}
+	pub fn get_tasks(&mut self) -> Vec<String> { self.task_manager.get_tasks() }
 
 	pub fn execute_task(
 		&mut self,
 		task: &str,
-	) -> anyhow::Result<()> {
-        self.task_manager.run(task)
+	) -> anyhow::Result<()>
+	{
+		self.task_manager.run(task)
 	}
 }

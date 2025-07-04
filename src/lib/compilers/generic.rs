@@ -1,32 +1,51 @@
 use std::{
+	collections::{
+		HashMap,
+		HashSet,
+	},
 	fs,
 	path::PathBuf,
 	process::Command,
 };
 
-use crate::lib::data::environment::Environment;
-use crate::lib::data::project::Project;
-use crate::lib::data::source_file_type::SourceFileType;
-use crate::lib::runtime::system::System;
-use crate::lib::ui::UI;
-use mlua::{UserData, UserDataMethods};
+use mlua::{
+	UserData,
+	UserDataMethods,
+};
 use pathdiff::diff_paths;
 
+use crate::lib::{
+	data::{
+		environment::Environment,
+		project::Project,
+		source_file_type::SourceFileType,
+	},
+	runtime::system::System,
+	ui::UI,
+	util::cache::Cache,
+};
+
 #[derive(Clone)]
-pub struct Generic {
+pub struct Generic
+{
 	environment: Environment,
+	cache: Cache,
 	ui: UI,
 	system: System,
 }
 
-impl Generic {
+impl Generic
+{
 	pub fn new(
 		environment: Environment,
+		cache: Cache,
 		ui: UI,
 		system: System,
-	) -> Self {
+	) -> Self
+	{
 		Generic {
 			environment,
+			cache,
 			ui,
 			system,
 		}
@@ -38,16 +57,69 @@ impl Generic {
 		toolset_compiler: &String,
 		obj_dir: &PathBuf,
 		o_files: &mut Vec<String>,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let source_files = project.source_files.get(&SourceFileType::Code);
-		let progress = self.ui.create_bar(source_files.len() as u64, "Compiling... ");
-		for file in source_files {
-			progress.inc(1);
-			progress.set_message(
-				"Compiling... ".to_string() + file.to_str().unwrap(),
-			);
-			let mut compiler = Command::new(toolset_compiler);
 
+		let binding = self
+			.cache
+			.get_value(&(toolset_compiler.to_string() + "_cache"))
+			.unwrap_or(toml::Value::Array(Vec::new()));
+
+		let binding2: Vec<toml::Value> = Vec::new();
+
+		let mut generic_cache: HashSet<String> = binding
+			.as_array()
+			.unwrap_or(&binding2)
+			.iter()
+			.map(|value| value.as_str().unwrap().to_string())
+			.collect::<HashSet<String>>();
+
+		let hashes: HashMap<&PathBuf, String> = source_files
+			.iter()
+			.filter_map(|file| {
+				match sha256::try_digest(file) {
+					Ok(digest) => Some((file, digest)),
+					Err(_) => None,
+				}
+			})
+			.collect();
+
+		let dirty_files: Vec<&PathBuf> = source_files
+			.iter()
+			.filter(|file| {
+				match hashes.get(file) {
+					Some(hash) => !generic_cache.contains(hash),
+
+					None => true,
+				}
+			})
+			.collect();
+
+		let clean_hashes: HashSet<String> = source_files
+			.iter()
+			.filter_map(|file| {
+				match hashes.get(file) {
+					Some(hash) => {
+						if generic_cache.contains(hash) {
+							Some(hash.clone())
+						} else {
+							None
+						}
+					}
+
+					None => None,
+				}
+			})
+			.collect();
+
+		let progress = self
+			.ui
+			.create_bar(dirty_files.len() as u64, "Compiling... ");
+
+		generic_cache = clean_hashes;
+
+		for file in source_files.clone() {
 			let o_file = obj_dir.join(
 				diff_paths(&file, &(self.environment).project_directory)
 					.unwrap()
@@ -55,6 +127,18 @@ impl Generic {
 					.unwrap()
 					.to_string() + ".o",
 			);
+
+			o_files.push(o_file.to_str().unwrap().to_string());
+
+			if !dirty_files.contains(&&file) {
+				continue;
+			}
+
+			progress.inc(1);
+			progress.set_message(
+				"Compiling... ".to_string() + file.to_str().unwrap(),
+			);
+			let mut compiler = Command::new(toolset_compiler);
 
 			if !o_file.parent().unwrap().exists() {
 				fs::create_dir_all(o_file.parent().unwrap())?;
@@ -64,8 +148,6 @@ impl Generic {
 				"-c".to_string(),
 				format!("-o{}", o_file.to_str().unwrap()),
 			]);
-
-			o_files.push(o_file.to_str().unwrap().to_string());
 
 			for incl in project.include_paths.clone() {
 				compiler_args.push(format!("-I{incl}"))
@@ -81,14 +163,31 @@ impl Generic {
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			self.system.execute(
+			match self.system.execute(
 				compiler
 					.args(&compiler_args)
 					.current_dir(&(self.environment).project_directory),
-			)?;
+			) {
+				Ok(status) => {
+					generic_cache.insert(hashes[&file].clone());
+					Ok(status)
+				}
+
+				Err(err) => Err(err),
+			}?;
 		}
 
 		self.ui.remove_bar(progress);
+
+		let generic_cache_toml: toml::Value = toml::Value::Array(
+			generic_cache
+				.iter()
+				.map(|value| toml::Value::String(value.clone()))
+				.collect::<Vec<toml::Value>>(),
+		);
+
+		self.cache.set_value("generic_cache", generic_cache_toml)?;
+		self.cache.flush()?;
 
 		Ok(())
 	}
@@ -100,7 +199,8 @@ impl Generic {
 		out_dir: &PathBuf,
 		output: &String,
 		o_files: &mut Vec<String>,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let spinner = self.ui.create_spinner("Linking...");
 		let mut linker = Command::new(toolset_linker);
 		let mut linker_args = Vec::new();
@@ -141,7 +241,8 @@ impl Generic {
 		toolset_compiler: &String,
 		toolset_linker: &String,
 		project: &Project,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let obj_dir: PathBuf = (self.environment)
 			.numake_directory
 			.join(format!("obj/{}", project.name));
@@ -174,8 +275,10 @@ impl Generic {
 	}
 }
 
-impl UserData for Generic {
-	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+impl UserData for Generic
+{
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M)
+	{
 		methods.add_method_mut(
 			"build",
 			|_,

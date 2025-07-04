@@ -1,39 +1,66 @@
-use crate::lib::data::environment::Environment;
-use crate::lib::data::project::Project;
-use crate::lib::data::project_type::ProjectType;
-use crate::lib::data::source_file_type::SourceFileType;
-use crate::lib::runtime::system::System;
-use crate::lib::ui::UI;
-use crate::lib::util::download_vswhere;
-use crate::lib::util::error::NuMakeError::{MsvcWindowsOnly, VcNotFound};
-use anyhow::anyhow;
-use mlua::{prelude::LuaValue, FromLua, Lua, UserData, UserDataMethods, Value};
-use pathdiff::diff_paths;
 use std::{
-	collections::HashMap,
+	collections::{
+		HashMap,
+		HashSet,
+	},
 	fs,
 	fs::File,
-	io::Write,
+	io::Write
+	,
 	path::PathBuf,
 	process::Command,
 };
+
+use anyhow::anyhow;
+use mlua::{
+	prelude::LuaValue,
+	FromLua,
+	Lua,
+	UserData,
+	UserDataMethods,
+	Value,
+};
+use pathdiff::diff_paths;
 use tempfile::tempdir;
 
+use crate::lib::{
+	data::{
+		environment::Environment,
+		project::Project,
+		project_type::ProjectType,
+		source_file_type::SourceFileType,
+	},
+	runtime::system::System,
+	ui::UI,
+	util::{
+		cache::Cache,
+		download_vswhere,
+		error::NuMakeError::VcNotFound,
+	},
+};
+use crate::lib::util::error::NuMakeError::MsvcWindowsOnly;
+
 #[derive(Clone)]
-pub struct MSVC {
+pub struct MSVC
+{
 	environment: Environment,
+	cache: Cache,
 	ui: UI,
 	system: System,
 }
 
-impl MSVC {
+impl MSVC
+{
 	pub fn new(
 		environment: Environment,
+		cache: Cache,
 		ui: UI,
 		system: System,
-	) -> Self {
-		MSVC {
+	) -> Self
+	{
+		Self {
 			environment,
+			cache,
 			ui,
 			system,
 		}
@@ -44,7 +71,8 @@ impl MSVC {
 		arch: Option<String>,
 		platform_type: Option<String>,
 		winsdk_version: Option<String>,
-	) -> anyhow::Result<HashMap<String, String>> {
+	) -> anyhow::Result<HashMap<String, String>>
+	{
 		let vswhere_path =
 			(self.environment).numake_directory.join("vswhere.exe");
 		if !vswhere_path.exists() {
@@ -124,17 +152,82 @@ impl MSVC {
 		obj_dir: &PathBuf,
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let source_files = project.source_files.get(&SourceFileType::Code);
-		let progress = self.ui.create_bar(source_files.len() as u64, "Compiling... ");
-		// COMPILATION STEP
-		for file in source_files {
-			progress.inc(1);
-			progress.set_message(
-				"Compiling... ".to_string() + file.to_str().unwrap(),
-			);
-			let mut compiler = Command::new("CL");
 
+		let binding = self
+			.cache
+			.get_value("msvc_cache")
+			.unwrap_or(toml::Value::Array(Vec::new()));
+
+		let binding2: Vec<toml::Value> = Vec::new();
+
+		/*
+		 * We cache the hashes of files that have been previously compiled
+		 * to figure out whether we should compile them again.
+		 */
+		let mut msvc_cache: HashSet<String> = binding
+			.as_array()
+			.unwrap_or(&binding2)
+			.iter()
+			.map(|value| value.as_str().unwrap().to_string())
+			.collect::<HashSet<String>>();
+
+		/*
+		 * Hash the contents of every source file once
+		 * so we don't have to do it multiple times.
+		 */
+		let hashes: HashMap<&PathBuf, String> = source_files
+			.iter()
+			.filter_map(|file| {
+				match sha256::try_digest(file) {
+					Ok(digest) => Some((file, digest)),
+					Err(_) => None,
+				}
+			})
+			.collect();
+
+		let dirty_files: Vec<&PathBuf> = source_files
+			.iter()
+			.filter(|file| {
+				match hashes.get(file) {
+					Some(hash) => !msvc_cache.contains(hash),
+
+					None => true,
+				}
+			})
+			.collect();
+
+		let clean_hashes: HashSet<String> = source_files
+			.iter()
+			.filter_map(|file| {
+				match hashes.get(file) {
+					Some(hash) => {
+						if msvc_cache.contains(hash) {
+							Some(hash.clone())
+						} else {
+							None
+						}
+					}
+
+					None => None,
+				}
+			})
+			.collect();
+
+		let progress = self
+			.ui
+			.create_bar(dirty_files.len() as u64, "Compiling... ");
+
+		/*
+		 * Reset the cache to only the clean files
+		 * to remove possible leftover hashes of deleted files.
+		 */
+		msvc_cache = clean_hashes;
+
+		// COMPILATION STEP
+		for file in source_files.clone() {
 			let o_file = obj_dir.join(
 				diff_paths(&file, &(self.environment).numake_directory)
 					.unwrap()
@@ -147,12 +240,22 @@ impl MSVC {
 				fs::create_dir_all(o_file.parent().unwrap())?;
 			}
 
+			o_files.push(o_file.to_str().unwrap_or_default().to_string());
+
+			if !dirty_files.contains(&&file) {
+				continue;
+			}
+
+			progress.inc(1);
+			progress.set_message(
+				"Compiling... ".to_string() + file.to_str().unwrap(),
+			);
+			let mut compiler = Command::new("CL");
+
 			let mut compiler_args = Vec::from([
 				"-c".to_string(),
 				format!("-Fo{}", o_file.to_str().unwrap()),
 			]);
-
-			o_files.push(o_file.to_str().unwrap().to_string());
 
 			for incl in project.include_paths.clone() {
 				compiler_args.push(format!("-I{incl}"));
@@ -168,14 +271,31 @@ impl MSVC {
 
 			compiler_args.push(file.to_str().unwrap_or("ERROR").to_string());
 
-			self.system.msvc_execute(
+			match self.system.msvc_execute(
 				compiler
 					.envs(msvc_env)
 					.args(&compiler_args)
 					.current_dir(working_directory),
-			)?;
+			) {
+				Ok(status) => {
+					msvc_cache.insert(hashes[&file].clone());
+					Ok(status)
+				}
+
+				Err(err) => Err(err),
+			}?;
 		}
 		self.ui.remove_bar(progress);
+
+		let msvc_cache_toml: toml::Value = toml::Value::Array(
+			msvc_cache
+				.iter()
+				.map(|value| toml::Value::String(value.clone()))
+				.collect::<Vec<toml::Value>>(),
+		);
+
+		self.cache.set_value("msvc_cache", msvc_cache_toml)?;
+		self.cache.flush()?;
 		Ok(())
 	}
 
@@ -187,10 +307,13 @@ impl MSVC {
 		res_dir: &PathBuf,
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let resource_files =
 			project.source_files.get(&SourceFileType::Resource);
-		let progress = self.ui.create_bar(resource_files.len() as u64, "Compiling Resources... ");
+		let progress = self
+			.ui
+			.create_bar(resource_files.len() as u64, "Compiling Resources... ");
 		// RESOURCE FILE HANDLING
 		for resource_file in resource_files {
 			progress.inc(1);
@@ -288,7 +411,8 @@ impl MSVC {
 		out_dir: &PathBuf,
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let spinner = self.ui.create_spinner("Linking...");
 		// LINKING STEP
 		let mut linker = Command::new(match project.project_type {
@@ -339,7 +463,8 @@ impl MSVC {
 	fn build(
 		&self,
 		_: &Project,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		Err(anyhow!(MsvcWindowsOnly))
 	}
 
@@ -347,15 +472,19 @@ impl MSVC {
 	fn build(
 		&mut self,
 		project: &Project,
-	) -> anyhow::Result<()> {
-		let obj_dir: PathBuf = self.environment
+	) -> anyhow::Result<()>
+	{
+		let obj_dir: PathBuf = self
+			.environment
 			.numake_directory
 			.join(format!("obj/{}", project.name));
-		let out_dir: PathBuf = self.environment
+		let out_dir: PathBuf = self
+			.environment
 			.numake_directory
 			.join(format!("out/{}", project.name));
 
-		let res_dir: PathBuf = self.environment
+		let res_dir: PathBuf = self
+			.environment
 			.numake_directory
 			.join(format!("res/{}", project.name));
 
@@ -409,22 +538,26 @@ impl MSVC {
 	}
 }
 
-impl UserData for MSVC {
-	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-		methods.add_method_mut("build", |_, this, project: Project| match this
-			.build(&project)
-		{
-			Ok(_) => Ok(()),
-			Err(err) => Err(mlua::Error::external(err)),
+impl UserData for MSVC
+{
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M)
+	{
+		methods.add_method_mut("build", |_, this, project: Project| {
+			match this.build(&project) {
+				Ok(_) => Ok(()),
+				Err(err) => Err(mlua::Error::external(err)),
+			}
 		})
 	}
 }
 
-impl FromLua for MSVC {
+impl FromLua for MSVC
+{
 	fn from_lua(
 		value: LuaValue,
 		_: &Lua,
-	) -> mlua::Result<Self> {
+	) -> mlua::Result<Self>
+	{
 		match value {
 			Value::UserData(user_data) => {
 				if user_data.is::<Self>() {
