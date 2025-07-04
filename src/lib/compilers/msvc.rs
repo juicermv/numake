@@ -1,38 +1,62 @@
-use crate::lib::data::environment::Environment;
-use crate::lib::data::project::Project;
-use crate::lib::data::project_type::ProjectType;
-use crate::lib::data::source_file_type::SourceFileType;
-use crate::lib::runtime::system::System;
-use crate::lib::ui::UI;
-use crate::lib::util::cache::Cache;
-use crate::lib::util::download_vswhere;
-use crate::lib::util::error::NuMakeError::{MsvcWindowsOnly, VcNotFound};
-use anyhow::anyhow;
-use mlua::{prelude::LuaValue, FromLua, Lua, UserData, UserDataMethods, Value};
-use pathdiff::diff_paths;
-use std::collections::HashSet;
-use std::iter::Map;
 use std::{
-	collections::HashMap, fs, fs::File, io::Write, path::PathBuf,
+	collections::{
+		HashMap,
+		HashSet,
+	},
+	fs,
+	fs::File,
+	io::Write
+	,
+	path::PathBuf,
 	process::Command,
 };
+
+use anyhow::anyhow;
+use mlua::{
+	prelude::LuaValue,
+	FromLua,
+	Lua,
+	UserData,
+	UserDataMethods,
+	Value,
+};
+use pathdiff::diff_paths;
 use tempfile::tempdir;
 
+use crate::lib::{
+	data::{
+		environment::Environment,
+		project::Project,
+		project_type::ProjectType,
+		source_file_type::SourceFileType,
+	},
+	runtime::system::System,
+	ui::UI,
+	util::{
+		cache::Cache,
+		download_vswhere,
+		error::NuMakeError::VcNotFound,
+	},
+};
+
 #[derive(Clone)]
-pub struct MSVC {
+pub struct MSVC
+{
 	environment: Environment,
 	cache: Cache,
 	ui: UI,
 	system: System,
 }
 
-impl MSVC {
+impl MSVC
+{
 	pub fn new(
 		environment: Environment,
 		cache: Cache,
 		ui: UI,
 		system: System,
-	) -> Self {
+	) -> Self
+	{
 		Self {
 			environment,
 			cache,
@@ -46,7 +70,8 @@ impl MSVC {
 		arch: Option<String>,
 		platform_type: Option<String>,
 		winsdk_version: Option<String>,
-	) -> anyhow::Result<HashMap<String, String>> {
+	) -> anyhow::Result<HashMap<String, String>>
+	{
 		let vswhere_path =
 			(self.environment).numake_directory.join("vswhere.exe");
 		if !vswhere_path.exists() {
@@ -126,7 +151,8 @@ impl MSVC {
 		obj_dir: &PathBuf,
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let source_files = project.source_files.get(&SourceFileType::Code);
 
 		let binding = self
@@ -148,40 +174,44 @@ impl MSVC {
 			.collect::<HashSet<String>>();
 
 		/*
-         * Hash the contents of every source file once 
-         * so we don't have to do it multiple times.
-         */
+		 * Hash the contents of every source file once
+		 * so we don't have to do it multiple times.
+		 */
 		let hashes: HashMap<&PathBuf, String> = source_files
 			.iter()
-			.filter_map(|file| match sha256::try_digest(file) {
-				Ok(digest) => Some((file, digest)),
-				Err(_) => None,
+			.filter_map(|file| {
+				match sha256::try_digest(file) {
+					Ok(digest) => Some((file, digest)),
+					Err(_) => None,
+				}
 			})
 			.collect();
 
 		let dirty_files: Vec<&PathBuf> = source_files
 			.iter()
-			.filter(|file| match hashes.get(file) {
-				Some(hash) => {
-					!msvc_cache.contains(hash)
-				}
+			.filter(|file| {
+				match hashes.get(file) {
+					Some(hash) => !msvc_cache.contains(hash),
 
-				None => true,
+					None => true,
+				}
 			})
 			.collect();
 
 		let clean_hashes: HashSet<String> = source_files
 			.iter()
-			.filter_map(|file| match hashes.get(file) {
-				Some(hash) => {
-					if msvc_cache.contains(hash) {
-						Some(hash.clone())
-					} else {
-						None
+			.filter_map(|file| {
+				match hashes.get(file) {
+					Some(hash) => {
+						if msvc_cache.contains(hash) {
+							Some(hash.clone())
+						} else {
+							None
+						}
 					}
-				}
 
-				None => None,
+					None => None,
+				}
 			})
 			.collect();
 
@@ -205,6 +235,10 @@ impl MSVC {
 					.to_string() + ".obj",
 			);
 
+			if !o_file.parent().unwrap().exists() {
+				fs::create_dir_all(o_file.parent().unwrap())?;
+			}
+
 			o_files.push(o_file.to_str().unwrap_or_default().to_string());
 
 			if !dirty_files.contains(&&file) {
@@ -216,10 +250,6 @@ impl MSVC {
 				"Compiling... ".to_string() + file.to_str().unwrap(),
 			);
 			let mut compiler = Command::new("CL");
-
-			if !o_file.parent().unwrap().exists() {
-				fs::create_dir_all(o_file.parent().unwrap())?;
-			}
 
 			let mut compiler_args = Vec::from([
 				"-c".to_string(),
@@ -276,7 +306,8 @@ impl MSVC {
 		res_dir: &PathBuf,
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let resource_files =
 			project.source_files.get(&SourceFileType::Resource);
 		let progress = self
@@ -379,7 +410,8 @@ impl MSVC {
 		out_dir: &PathBuf,
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let spinner = self.ui.create_spinner("Linking...");
 		// LINKING STEP
 		let mut linker = Command::new(match project.project_type {
@@ -430,7 +462,8 @@ impl MSVC {
 	fn build(
 		&self,
 		_: &Project,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		Err(anyhow!(MsvcWindowsOnly))
 	}
 
@@ -438,7 +471,8 @@ impl MSVC {
 	fn build(
 		&mut self,
 		project: &Project,
-	) -> anyhow::Result<()> {
+	) -> anyhow::Result<()>
+	{
 		let obj_dir: PathBuf = self
 			.environment
 			.numake_directory
@@ -503,22 +537,26 @@ impl MSVC {
 	}
 }
 
-impl UserData for MSVC {
-	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-		methods.add_method_mut("build", |_, this, project: Project| match this
-			.build(&project)
-		{
-			Ok(_) => Ok(()),
-			Err(err) => Err(mlua::Error::external(err)),
+impl UserData for MSVC
+{
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M)
+	{
+		methods.add_method_mut("build", |_, this, project: Project| {
+			match this.build(&project) {
+				Ok(_) => Ok(()),
+				Err(err) => Err(mlua::Error::external(err)),
+			}
 		})
 	}
 }
 
-impl FromLua for MSVC {
+impl FromLua for MSVC
+{
 	fn from_lua(
 		value: LuaValue,
 		_: &Lua,
-	) -> mlua::Result<Self> {
+	) -> mlua::Result<Self>
+	{
 		match value {
 			Value::UserData(user_data) => {
 				if user_data.is::<Self>() {
