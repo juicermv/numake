@@ -264,6 +264,7 @@ impl MSVC {
 		);
 
 		self.cache.set_value("msvc_cache", msvc_cache_toml)?;
+		self.cache.flush()?;
 		Ok(())
 	}
 
