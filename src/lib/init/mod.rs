@@ -79,7 +79,7 @@ impl Init {
 
 		let project_directory = dunce::canonicalize(project_dir_str)?;
 		let project_file = project_directory.join(project_file_str);
-		let numake_directory = project_directory.join("numake");
+		let numake_directory = project_directory.join("numake_build");
 
 		Ok(Environment {
 			project_file,
