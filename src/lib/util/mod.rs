@@ -16,6 +16,7 @@ use sha256::digest;
 
 pub mod cache;
 pub mod error;
+pub mod build_cache;
 
 pub fn hash_string(val: &str) -> String {
     let mut result = digest(val);

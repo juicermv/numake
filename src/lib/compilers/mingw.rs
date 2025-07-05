@@ -30,12 +30,13 @@ use crate::lib::{
 	ui::UI,
 	util::cache::Cache,
 };
+use crate::lib::util::build_cache::BuildCache;
 
 #[derive(Clone)]
 pub struct MinGW
 {
 	environment: Environment,
-	cache: Cache,
+	cache: BuildCache,
 	ui: UI,
 	system: System,
 }
@@ -44,7 +45,7 @@ impl MinGW
 {
 	pub fn new(
 		environment: Environment,
-		cache: Cache,
+		cache: BuildCache,
 		ui: UI,
 		system: System,
 	) -> Self
@@ -67,23 +68,11 @@ impl MinGW
 	{
 		let source_files = project.source_files.get(&SourceFileType::Code);
 
-		let binding = self
-			.cache
-			.get_value("mingw_cache")
-			.unwrap_or(toml::Value::Array(Vec::new()));
-
-		let binding2: Vec<toml::Value> = Vec::new();
-
 		/*
 		 * We cache the hashes of files that have been previously compiled
 		 * to figure out whether we should compile them again.
 		 */
-		let mut mingw_cache: HashSet<String> = binding
-			.as_array()
-			.unwrap_or(&binding2)
-			.iter()
-			.map(|value| value.as_str().unwrap().to_string())
-			.collect::<HashSet<String>>();
+		let mut mingw_cache: HashSet<String> = self.cache.read_set("mingw_cache")?;
 
 		/*
 		 * Hash the contents of every source file once
@@ -200,15 +189,7 @@ impl MinGW
 
 		self.ui.remove_bar(progress);
 
-		let mingw_cache_toml: toml::Value = toml::Value::Array(
-			mingw_cache
-				.iter()
-				.map(|value| toml::Value::String(value.clone()))
-				.collect::<Vec<toml::Value>>(),
-		);
-
-		self.cache.set_value("mingw_cache", mingw_cache_toml)?;
-		self.cache.flush()?;
+		self.cache.write_set("mingw_cache", mingw_cache)?;
 
 		Ok(())
 	}
