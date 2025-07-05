@@ -38,13 +38,14 @@ use crate::lib::{
 		error::NuMakeError::VcNotFound,
 	},
 };
+use crate::lib::util::build_cache::BuildCache;
 use crate::lib::util::error::NuMakeError::MsvcWindowsOnly;
 
 #[derive(Clone)]
 pub struct MSVC
 {
 	environment: Environment,
-	cache: Cache,
+	cache: BuildCache,
 	ui: UI,
 	system: System,
 }
@@ -53,7 +54,7 @@ impl MSVC
 {
 	pub fn new(
 		environment: Environment,
-		cache: Cache,
+		cache: BuildCache,
 		ui: UI,
 		system: System,
 	) -> Self
@@ -156,23 +157,11 @@ impl MSVC
 	{
 		let source_files = project.source_files.get(&SourceFileType::Code);
 
-		let binding = self
-			.cache
-			.get_value("msvc_cache")
-			.unwrap_or(toml::Value::Array(Vec::new()));
-
-		let binding2: Vec<toml::Value> = Vec::new();
-
 		/*
 		 * We cache the hashes of files that have been previously compiled
 		 * to figure out whether we should compile them again.
 		 */
-		let mut msvc_cache: HashSet<String> = binding
-			.as_array()
-			.unwrap_or(&binding2)
-			.iter()
-			.map(|value| value.as_str().unwrap().to_string())
-			.collect::<HashSet<String>>();
+		let mut msvc_cache: HashSet<String> = self.cache.read_set("msvc_cache")?;
 
 		/*
 		 * Hash the contents of every source file once
@@ -287,15 +276,7 @@ impl MSVC
 		}
 		self.ui.remove_bar(progress);
 
-		let msvc_cache_toml: toml::Value = toml::Value::Array(
-			msvc_cache
-				.iter()
-				.map(|value| toml::Value::String(value.clone()))
-				.collect::<Vec<toml::Value>>(),
-		);
-
-		self.cache.set_value("msvc_cache", msvc_cache_toml)?;
-		self.cache.flush()?;
+		self.cache.write_set("msvc_cache", msvc_cache)?;
 		Ok(())
 	}
 

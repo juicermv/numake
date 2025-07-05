@@ -28,6 +28,7 @@ use crate::lib::{
 	ui::UI,
 	util::cache::Cache,
 };
+use crate::lib::util::build_cache::BuildCache;
 
 pub mod filesystem;
 pub mod network;
@@ -64,6 +65,7 @@ impl Runtime
 	) -> anyhow::Result<Self>
 	{
 		let cache: Cache = Cache::new(environment.clone())?;
+		let build_cache: BuildCache = BuildCache::new(environment.clone())?;
 		let system = System::new(ui.clone());
 
 		Ok(Runtime {
@@ -77,19 +79,19 @@ impl Runtime
 			filesystem: Filesystem::new(environment.clone()),
 			msvc: MSVC::new(
 				environment.clone(),
-				cache.clone(),
+				build_cache.clone(),
 				ui.clone(),
 				system.clone(),
 			),
 			mingw: MinGW::new(
 				environment.clone(),
-				cache.clone(),
+				build_cache.clone(),
 				ui.clone(),
 				system.clone(),
 			),
 			generic: Generic::new(
 				environment.clone(),
-				cache.clone(),
+				build_cache.clone(),
 				ui.clone(),
 				system.clone(),
 			),

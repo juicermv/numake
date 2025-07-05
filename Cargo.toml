@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = { version = "1.0.95" }
 base64 = "0.22.1"
+bitcode = "0.6.6"
 bzip2 = "0.6.0"
 clap = { version = "4.5.40", features = ["derive"] }
 console = "0.16.0"

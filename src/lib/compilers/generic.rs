@@ -24,12 +24,13 @@ use crate::lib::{
 	ui::UI,
 	util::cache::Cache,
 };
+use crate::lib::util::build_cache::BuildCache;
 
 #[derive(Clone)]
 pub struct Generic
 {
 	environment: Environment,
-	cache: Cache,
+	cache: BuildCache,
 	ui: UI,
 	system: System,
 }
@@ -38,7 +39,7 @@ impl Generic
 {
 	pub fn new(
 		environment: Environment,
-		cache: Cache,
+		cache: BuildCache,
 		ui: UI,
 		system: System,
 	) -> Self
@@ -61,19 +62,7 @@ impl Generic
 	{
 		let source_files = project.source_files.get(&SourceFileType::Code);
 
-		let binding = self
-			.cache
-			.get_value(&(toolset_compiler.to_string() + "_cache"))
-			.unwrap_or(toml::Value::Array(Vec::new()));
-
-		let binding2: Vec<toml::Value> = Vec::new();
-
-		let mut generic_cache: HashSet<String> = binding
-			.as_array()
-			.unwrap_or(&binding2)
-			.iter()
-			.map(|value| value.as_str().unwrap().to_string())
-			.collect::<HashSet<String>>();
+		let mut generic_cache: HashSet<String> = self.cache.read_set(&(toolset_compiler.to_string() + "_cache"))?;
 
 		let hashes: HashMap<&PathBuf, String> = source_files
 			.iter()
@@ -178,16 +167,8 @@ impl Generic
 		}
 
 		self.ui.remove_bar(progress);
-
-		let generic_cache_toml: toml::Value = toml::Value::Array(
-			generic_cache
-				.iter()
-				.map(|value| toml::Value::String(value.clone()))
-				.collect::<Vec<toml::Value>>(),
-		);
-
-		self.cache.set_value("generic_cache", generic_cache_toml)?;
-		self.cache.flush()?;
+		
+		self.cache.write_set(&(toolset_compiler.to_string() + "_cache"), generic_cache)?;
 
 		Ok(())
 	}
