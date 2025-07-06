@@ -58,7 +58,7 @@ impl Generic
 		&mut self,
 		project: &Project,
 		toolset_compiler: &String,
-		obj_dir: &PathBuf,
+		obj_dir: &Path,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()>
 	{
@@ -114,7 +114,7 @@ impl Generic
 
 		for file in source_files.clone() {
 			let o_file = obj_dir.join(
-				diff_paths(&file, &(self.environment).project_directory)
+				diff_paths(&file, &self.environment.project_directory)
 					.unwrap()
 					.to_str()
 					.unwrap()
@@ -159,7 +159,7 @@ impl Generic
 			match self.system.execute(
 				compiler
 					.args(&compiler_args)
-					.current_dir(&(self.environment).project_directory),
+					.current_dir(&self.environment.project_directory),
 			) {
 				Ok(status) => {
 					generic_cache.insert(hashes[&file].clone());
@@ -200,7 +200,7 @@ impl Generic
 					Some(
 						diff_paths(
 							absolute_path,
-							&(self.environment).project_directory,
+							&self.environment.project_directory,
 						)?
 						.to_str()?
 						.to_string(),
@@ -230,7 +230,7 @@ impl Generic
 		self.system.execute(
 			linker
 				.args(&linker_args)
-				.current_dir(&(self.environment).project_directory),
+				.current_dir(&self.environment.project_directory),
 		)?;
 
 		self.ui.remove_bar(spinner);
@@ -245,10 +245,10 @@ impl Generic
 		project: &Project,
 	) -> anyhow::Result<()>
 	{
-		let obj_dir: PathBuf = (self.environment)
+		let obj_dir: PathBuf = self.environment
 			.numake_directory
 			.join(format!("obj/{}", project.name));
-		let out_dir: PathBuf = (self.environment)
+		let out_dir: PathBuf = self.environment
 			.numake_directory
 			.join(format!("out/{}", project.name));
 

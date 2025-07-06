@@ -4,7 +4,6 @@ use crate::lib::data::environment::Environment;
 use crate::lib::runtime::Runtime;
 use crate::lib::ui::{format, UI};
 use clap::Parser;
-use mlua::prelude::LuaResult;
 use std::env;
 use std::process::ExitCode;
 

@@ -9,7 +9,7 @@ use std::{
 	path::PathBuf,
 	process::Command,
 };
-
+use std::path::Path;
 use anyhow::anyhow;
 use mlua::{
 	prelude::LuaValue,
@@ -38,6 +38,7 @@ use crate::lib::{
 		error::NuMakeError::VcNotFound,
 	},
 };
+use crate::lib::util::error::NuMakeError::MsvcWindowsOnly;
 
 #[derive(Clone)]
 pub struct MSVC
@@ -73,7 +74,7 @@ impl MSVC
 	) -> anyhow::Result<HashMap<String, String>>
 	{
 		let vswhere_path =
-			(self.environment).numake_directory.join("vswhere.exe");
+			self.environment.numake_directory.join("vswhere.exe");
 		if !vswhere_path.exists() {
 			download_vswhere(&vswhere_path)?;
 		}
@@ -148,7 +149,7 @@ impl MSVC
 		&mut self,
 		project: &Project,
 		working_directory: &PathBuf,
-		obj_dir: &PathBuf,
+		obj_dir: &Path,
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()>
@@ -217,7 +218,7 @@ impl MSVC
 		// COMPILATION STEP
 		for file in source_files.clone() {
 			let o_file = obj_dir.join(
-				diff_paths(&file, &(self.environment).numake_directory)
+				diff_paths(&file, &self.environment.numake_directory)
 					.unwrap()
 					.to_str()
 					.unwrap()
@@ -283,8 +284,8 @@ impl MSVC
 		&mut self,
 		project: &Project,
 		working_directory: &PathBuf,
-		obj_dir: &PathBuf,
-		res_dir: &PathBuf,
+		obj_dir: &Path,
+		res_dir: &Path,
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()>
@@ -306,7 +307,7 @@ impl MSVC
 			let res_file = res_dir.join(
 				diff_paths(
 					&resource_file,
-					&(self.environment).numake_directory,
+					&self.environment.numake_directory,
 				)
 				.unwrap()
 				.to_str()
@@ -347,7 +348,7 @@ impl MSVC
 			let rbj_file = obj_dir.join(
 				diff_paths(
 					&resource_file,
-					&(self.environment).numake_directory,
+					&self.environment.numake_directory,
 				)
 				.unwrap()
 				.to_str()
@@ -388,7 +389,7 @@ impl MSVC
 		project: &Project,
 		output: &String,
 		working_directory: &PathBuf,
-		out_dir: &PathBuf,
+		out_dir: &Path,
 		msvc_env: &HashMap<String, String>,
 		o_files: Vec<String>,
 	) -> anyhow::Result<()>

@@ -60,8 +60,8 @@ impl MinGW
 	fn compile_step(
 		&mut self,
 		project: &Project,
-		obj_dir: &PathBuf,
-		mingw: &String,
+		obj_dir: &Path,
+		mingw: &str,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()>
 	{
@@ -125,7 +125,7 @@ impl MinGW
 		// COMPILATION STEP
 		for file in source_files.clone() {
 			let o_file = obj_dir.join(
-				diff_paths(&file, &(self.environment).project_directory)
+				diff_paths(&file, &self.environment.project_directory)
 					.unwrap()
 					.to_str()
 					.unwrap()
@@ -147,7 +147,7 @@ impl MinGW
 				"Compiling... ".to_string() + file.to_str().unwrap(),
 			);
 			let mut compiler = Command::new(
-				mingw.clone()
+				mingw.to_string()
 					+ match project.language {
 						ProjectLanguage::C => "gcc",
 						ProjectLanguage::CPP => "g++",
@@ -176,7 +176,7 @@ impl MinGW
 			match self.system.execute(
 				compiler
 					.args(&compiler_args)
-					.current_dir(&(self.environment).project_directory),
+					.current_dir(&self.environment.project_directory),
 			) {
 				Ok(status) => {
 					mingw_cache.insert(hashes[&file].clone());
@@ -197,8 +197,8 @@ impl MinGW
 	fn resource_step(
 		&mut self,
 		project: &Project,
-		mingw: &String,
-		res_dir: &PathBuf,
+		mingw: &str,
+		res_dir: &Path,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()>
 	{
@@ -214,12 +214,12 @@ impl MinGW
 				"Compiling Resources... ".to_string()
 					+ resource_file.to_str().unwrap(),
 			);
-			let mut resource_compiler = Command::new(mingw.clone() + "windres");
+			let mut resource_compiler = Command::new(mingw.to_string() + "windres");
 
 			let coff_file = res_dir.join(
 				diff_paths(
 					&resource_file,
-					&(self.environment).project_directory,
+					&self.environment.project_directory,
 				)
 				.unwrap()
 				.to_str()
@@ -251,7 +251,7 @@ impl MinGW
 			self.system.execute(
 				resource_compiler
 					.args(&res_compiler_args)
-					.current_dir(&(self.environment).project_directory),
+					.current_dir(&self.environment.project_directory),
 			)?;
 
 			o_files.push(coff_file.to_str().unwrap().to_string());
@@ -277,7 +277,7 @@ impl MinGW
 				Some(
 					diff_paths(
 						absolute_path,
-						&(self.environment).project_directory,
+						&self.environment.project_directory,
 					)?
 					.to_str()?
 					.to_string(),
@@ -309,7 +309,7 @@ impl MinGW
 				self.system.execute(
 					linker
 						.args(&linker_args)
-						.current_dir(&(self.environment).project_directory),
+						.current_dir(&self.environment.project_directory),
 				)?;
 			}
 
@@ -356,7 +356,7 @@ impl MinGW
 				self.system.execute(
 					linker
 						.args(&linker_args)
-						.current_dir(&(self.environment).project_directory),
+						.current_dir(&self.environment.project_directory),
 				)?;
 			}
 		}
@@ -371,14 +371,14 @@ impl MinGW
 		project: &Project,
 	) -> anyhow::Result<()>
 	{
-		let obj_dir: PathBuf = (self.environment)
+		let obj_dir: PathBuf = self.environment
 			.numake_directory
 			.join(format!("obj/{}", &project.name));
-		let out_dir: PathBuf = (self.environment)
+		let out_dir: PathBuf = self.environment
 			.numake_directory
 			.join(format!("out/{}", &project.name));
 
-		let res_dir: PathBuf = (self.environment)
+		let res_dir: PathBuf = self.environment
 			.numake_directory
 			.join(format!("res/{}", &project.name));
 
