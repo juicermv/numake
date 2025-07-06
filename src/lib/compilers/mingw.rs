@@ -65,6 +65,7 @@ impl MinGW
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()>
 	{
+		let cache_name = "mingw_cache_".to_string() + &project.name;
 		let source_files = project.source_files.get(&SourceFileType::Code);
 
 		/*
@@ -72,7 +73,7 @@ impl MinGW
 		 * to figure out whether we should compile them again.
 		 */
 		let mut mingw_cache: HashSet<String> =
-			self.cache.read_set("mingw_cache")?;
+			self.cache.read_set(&cache_name)?;
 
 		/*
 		 * Hash the contents of every source file once
@@ -189,7 +190,7 @@ impl MinGW
 
 		self.ui.remove_bar(progress);
 
-		self.cache.write_set("mingw_cache", mingw_cache)?;
+		self.cache.write_set(&cache_name, mingw_cache)?;
 
 		Ok(())
 	}

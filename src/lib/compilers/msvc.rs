@@ -6,10 +6,13 @@ use std::{
 	fs,
 	fs::File,
 	io::Write,
-	path::PathBuf,
+	path::{
+		Path,
+		PathBuf,
+	},
 	process::Command,
 };
-use std::path::Path;
+
 use anyhow::anyhow;
 use mlua::{
 	prelude::LuaValue,
@@ -32,13 +35,11 @@ use crate::lib::{
 	runtime::system::System,
 	ui::UI,
 	util::{
-		build_cache::BuildCache
-		,
+		build_cache::BuildCache,
 		download_vswhere,
 		error::NuMakeError::VcNotFound,
 	},
 };
-use crate::lib::util::error::NuMakeError::MsvcWindowsOnly;
 
 #[derive(Clone)]
 pub struct MSVC
@@ -154,6 +155,7 @@ impl MSVC
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()>
 	{
+		let cache_name = "msvc_cache_".to_string() + &project.name;
 		let source_files = project.source_files.get(&SourceFileType::Code);
 
 		/*
@@ -161,7 +163,7 @@ impl MSVC
 		 * to figure out whether we should compile them again.
 		 */
 		let mut msvc_cache: HashSet<String> =
-			self.cache.read_set("msvc_cache")?;
+			self.cache.read_set(&cache_name)?;
 
 		/*
 		 * Hash the contents of every source file once
@@ -276,7 +278,7 @@ impl MSVC
 		}
 		self.ui.remove_bar(progress);
 
-		self.cache.write_set("msvc_cache", msvc_cache)?;
+		self.cache.write_set(&cache_name, msvc_cache)?;
 		Ok(())
 	}
 
@@ -305,14 +307,11 @@ impl MSVC
 			let mut resource_compiler = Command::new("RC");
 
 			let res_file = res_dir.join(
-				diff_paths(
-					&resource_file,
-					&self.environment.numake_directory,
-				)
-				.unwrap()
-				.to_str()
-				.unwrap()
-				.to_string() + ".res",
+				diff_paths(&resource_file, &self.environment.numake_directory)
+					.unwrap()
+					.to_str()
+					.unwrap()
+					.to_string() + ".res",
 			);
 
 			if !res_file.parent().unwrap().exists() {
@@ -346,14 +345,11 @@ impl MSVC
 			let mut cvtres = Command::new("CVTRES");
 
 			let rbj_file = obj_dir.join(
-				diff_paths(
-					&resource_file,
-					&self.environment.numake_directory,
-				)
-				.unwrap()
-				.to_str()
-				.unwrap()
-				.to_string() + ".rbj",
+				diff_paths(&resource_file, &self.environment.numake_directory)
+					.unwrap()
+					.to_str()
+					.unwrap()
+					.to_string() + ".rbj",
 			);
 
 			if !rbj_file.parent().unwrap().exists() {
@@ -457,6 +453,7 @@ impl MSVC
 		_: &Project,
 	) -> anyhow::Result<()>
 	{
+		use crate::lib::util::error::NuMakeError::MsvcWindowsOnly;
 		Err(anyhow!(MsvcWindowsOnly))
 	}
 

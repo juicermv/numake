@@ -62,11 +62,12 @@ impl Generic
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()>
 	{
+		let cache_name = (toolset_compiler.to_string() + "_cache_") + &project.name;
 		let source_files = project.source_files.get(&SourceFileType::Code);
 
 		let mut generic_cache: HashSet<String> = self
 			.cache
-			.read_set(&(toolset_compiler.to_string() + "_cache"))?;
+			.read_set(&cache_name)?;
 
 		let hashes: HashMap<&PathBuf, String> = source_files
 			.iter()
@@ -173,7 +174,7 @@ impl Generic
 		self.ui.remove_bar(progress);
 
 		self.cache.write_set(
-			&(toolset_compiler.to_string() + "_cache"),
+			&cache_name,
 			generic_cache,
 		)?;
 
