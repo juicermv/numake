@@ -5,12 +5,11 @@ use std::{
 	},
 	fs,
 	fs::File,
-	io::Write
-	,
+	io::Write,
 	path::PathBuf,
 	process::Command,
 };
-
+use std::path::Path;
 use anyhow::anyhow;
 use mlua::{
 	prelude::LuaValue,
@@ -33,12 +32,12 @@ use crate::lib::{
 	runtime::system::System,
 	ui::UI,
 	util::{
-		cache::Cache,
+		build_cache::BuildCache
+		,
 		download_vswhere,
 		error::NuMakeError::VcNotFound,
 	},
 };
-use crate::lib::util::build_cache::BuildCache;
 use crate::lib::util::error::NuMakeError::MsvcWindowsOnly;
 
 #[derive(Clone)]
@@ -75,7 +74,7 @@ impl MSVC
 	) -> anyhow::Result<HashMap<String, String>>
 	{
 		let vswhere_path =
-			(self.environment).numake_directory.join("vswhere.exe");
+			self.environment.numake_directory.join("vswhere.exe");
 		if !vswhere_path.exists() {
 			download_vswhere(&vswhere_path)?;
 		}
@@ -150,7 +149,7 @@ impl MSVC
 		&mut self,
 		project: &Project,
 		working_directory: &PathBuf,
-		obj_dir: &PathBuf,
+		obj_dir: &Path,
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()>
@@ -161,7 +160,8 @@ impl MSVC
 		 * We cache the hashes of files that have been previously compiled
 		 * to figure out whether we should compile them again.
 		 */
-		let mut msvc_cache: HashSet<String> = self.cache.read_set("msvc_cache")?;
+		let mut msvc_cache: HashSet<String> =
+			self.cache.read_set("msvc_cache")?;
 
 		/*
 		 * Hash the contents of every source file once
@@ -218,7 +218,7 @@ impl MSVC
 		// COMPILATION STEP
 		for file in source_files.clone() {
 			let o_file = obj_dir.join(
-				diff_paths(&file, &(self.environment).numake_directory)
+				diff_paths(&file, &self.environment.numake_directory)
 					.unwrap()
 					.to_str()
 					.unwrap()
@@ -284,8 +284,8 @@ impl MSVC
 		&mut self,
 		project: &Project,
 		working_directory: &PathBuf,
-		obj_dir: &PathBuf,
-		res_dir: &PathBuf,
+		obj_dir: &Path,
+		res_dir: &Path,
 		msvc_env: &HashMap<String, String>,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()>
@@ -307,7 +307,7 @@ impl MSVC
 			let res_file = res_dir.join(
 				diff_paths(
 					&resource_file,
-					&(self.environment).numake_directory,
+					&self.environment.numake_directory,
 				)
 				.unwrap()
 				.to_str()
@@ -348,7 +348,7 @@ impl MSVC
 			let rbj_file = obj_dir.join(
 				diff_paths(
 					&resource_file,
-					&(self.environment).numake_directory,
+					&self.environment.numake_directory,
 				)
 				.unwrap()
 				.to_str()
@@ -389,9 +389,9 @@ impl MSVC
 		project: &Project,
 		output: &String,
 		working_directory: &PathBuf,
-		out_dir: &PathBuf,
+		out_dir: &Path,
 		msvc_env: &HashMap<String, String>,
-		o_files: &mut Vec<String>,
+		o_files: Vec<String>,
 	) -> anyhow::Result<()>
 	{
 		let spinner = self.ui.create_spinner("Linking...");
@@ -424,7 +424,18 @@ impl MSVC
 			linker_args.push(flag);
 		}
 
-		linker_args.append(o_files);
+		linker_args.append(
+			&mut o_files
+				.iter()
+				.filter_map(|absolute_path| {
+					Some(
+						diff_paths(absolute_path, working_directory)?
+							.to_str()?
+							.to_string(),
+					)
+				})
+				.collect(),
+		);
 
 		linker_args.append(&mut project.libs.clone());
 
@@ -510,7 +521,7 @@ impl MSVC
 			&working_directory,
 			&out_dir,
 			&msvc_env,
-			&mut o_files,
+			o_files,
 		)?;
 
 		project.copy_assets(&self.environment.project_directory, &out_dir)?;

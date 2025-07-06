@@ -7,7 +7,7 @@ use std::{
 	path::PathBuf,
 	process::Command,
 };
-
+use std::path::Path;
 use mlua::{
 	prelude::LuaValue,
 	FromLua,
@@ -28,9 +28,8 @@ use crate::lib::{
 	},
 	runtime::system::System,
 	ui::UI,
-	util::cache::Cache,
+	util::build_cache::BuildCache,
 };
-use crate::lib::util::build_cache::BuildCache;
 
 #[derive(Clone)]
 pub struct MinGW
@@ -61,8 +60,8 @@ impl MinGW
 	fn compile_step(
 		&mut self,
 		project: &Project,
-		obj_dir: &PathBuf,
-		mingw: &String,
+		obj_dir: &Path,
+		mingw: &str,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()>
 	{
@@ -72,7 +71,8 @@ impl MinGW
 		 * We cache the hashes of files that have been previously compiled
 		 * to figure out whether we should compile them again.
 		 */
-		let mut mingw_cache: HashSet<String> = self.cache.read_set("mingw_cache")?;
+		let mut mingw_cache: HashSet<String> =
+			self.cache.read_set("mingw_cache")?;
 
 		/*
 		 * Hash the contents of every source file once
@@ -125,7 +125,7 @@ impl MinGW
 		// COMPILATION STEP
 		for file in source_files.clone() {
 			let o_file = obj_dir.join(
-				diff_paths(&file, &(self.environment).project_directory)
+				diff_paths(&file, &self.environment.project_directory)
 					.unwrap()
 					.to_str()
 					.unwrap()
@@ -147,7 +147,7 @@ impl MinGW
 				"Compiling... ".to_string() + file.to_str().unwrap(),
 			);
 			let mut compiler = Command::new(
-				mingw.clone()
+				mingw.to_string()
 					+ match project.language {
 						ProjectLanguage::C => "gcc",
 						ProjectLanguage::CPP => "g++",
@@ -176,7 +176,7 @@ impl MinGW
 			match self.system.execute(
 				compiler
 					.args(&compiler_args)
-					.current_dir(&(self.environment).project_directory),
+					.current_dir(&self.environment.project_directory),
 			) {
 				Ok(status) => {
 					mingw_cache.insert(hashes[&file].clone());
@@ -197,8 +197,8 @@ impl MinGW
 	fn resource_step(
 		&mut self,
 		project: &Project,
-		mingw: &String,
-		res_dir: &PathBuf,
+		mingw: &str,
+		res_dir: &Path,
 		o_files: &mut Vec<String>,
 	) -> anyhow::Result<()>
 	{
@@ -214,12 +214,12 @@ impl MinGW
 				"Compiling Resources... ".to_string()
 					+ resource_file.to_str().unwrap(),
 			);
-			let mut resource_compiler = Command::new(mingw.clone() + "windres");
+			let mut resource_compiler = Command::new(mingw.to_string() + "windres");
 
 			let coff_file = res_dir.join(
 				diff_paths(
 					&resource_file,
-					&(self.environment).project_directory,
+					&self.environment.project_directory,
 				)
 				.unwrap()
 				.to_str()
@@ -251,7 +251,7 @@ impl MinGW
 			self.system.execute(
 				resource_compiler
 					.args(&res_compiler_args)
-					.current_dir(&(self.environment).project_directory),
+					.current_dir(&self.environment.project_directory),
 			)?;
 
 			o_files.push(coff_file.to_str().unwrap().to_string());
@@ -265,16 +265,30 @@ impl MinGW
 	fn linking_step(
 		&mut self,
 		project: &Project,
-		out_dir: &PathBuf,
-		mingw: &String,
+		out_dir: &Path,
+		mingw: &str,
 		output: &String,
-		o_files: &mut Vec<String>,
+		o_files: Vec<String>,
 	) -> anyhow::Result<()>
 	{
+		let mut relative_o_files = o_files
+			.iter()
+			.filter_map(|absolute_path| {
+				Some(
+					diff_paths(
+						absolute_path,
+						&self.environment.project_directory,
+					)?
+					.to_str()?
+					.to_string(),
+				)
+			})
+			.collect();
+
 		let spinner = self.ui.create_spinner("Linking...");
 		match project.project_type {
 			ProjectType::StaticLibrary => {
-				let mut linker = Command::new(mingw.clone() + "ar");
+				let mut linker = Command::new(mingw.to_string() + "ar");
 				let mut linker_args = Vec::from([
 					"rcs".to_string(),
 					format!(
@@ -284,7 +298,7 @@ impl MinGW
 					),
 				]);
 
-				linker_args.append(o_files);
+				linker_args.append(&mut relative_o_files);
 
 				for def_file in
 					project.source_files.get(&SourceFileType::ModuleDefinition)
@@ -295,13 +309,13 @@ impl MinGW
 				self.system.execute(
 					linker
 						.args(&linker_args)
-						.current_dir(&(self.environment).project_directory),
+						.current_dir(&self.environment.project_directory),
 				)?;
 			}
 
 			_ => {
 				let mut linker = Command::new(
-					mingw.clone()
+					mingw.to_string()
 						+ match project.language {
 							ProjectLanguage::C => "gcc",
 							ProjectLanguage::CPP => "g++",
@@ -309,7 +323,7 @@ impl MinGW
 				);
 				let mut linker_args = Vec::new();
 
-				linker_args.append(o_files);
+				linker_args.append(&mut relative_o_files);
 
 				for def_file in
 					project.source_files.get(&SourceFileType::ModuleDefinition)
@@ -342,7 +356,7 @@ impl MinGW
 				self.system.execute(
 					linker
 						.args(&linker_args)
-						.current_dir(&(self.environment).project_directory),
+						.current_dir(&self.environment.project_directory),
 				)?;
 			}
 		}
@@ -357,14 +371,14 @@ impl MinGW
 		project: &Project,
 	) -> anyhow::Result<()>
 	{
-		let obj_dir: PathBuf = (self.environment)
+		let obj_dir: PathBuf = self.environment
 			.numake_directory
 			.join(format!("obj/{}", &project.name));
-		let out_dir: PathBuf = (self.environment)
+		let out_dir: PathBuf = self.environment
 			.numake_directory
 			.join(format!("out/{}", &project.name));
 
-		let res_dir: PathBuf = (self.environment)
+		let res_dir: PathBuf = self.environment
 			.numake_directory
 			.join(format!("res/{}", &project.name));
 
@@ -394,7 +408,7 @@ impl MinGW
 			&out_dir,
 			&mingw,
 			&project.output.clone().unwrap_or("out".to_string()),
-			&mut o_files,
+			o_files,
 		)?;
 
 		project.copy_assets(&self.environment.project_directory, &out_dir)?;

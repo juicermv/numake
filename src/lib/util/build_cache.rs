@@ -1,10 +1,7 @@
 use crate::lib::data::environment::Environment;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
-use std::fs::File;
-use std::io::Write;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
 #[derive(Default, Debug, Clone)]
 pub struct BuildCache {
