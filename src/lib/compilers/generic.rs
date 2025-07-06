@@ -4,7 +4,10 @@ use std::{
 		HashSet,
 	},
 	fs,
-	path::PathBuf,
+	path::{
+		Path,
+		PathBuf,
+	},
 	process::Command,
 };
 
@@ -22,9 +25,8 @@ use crate::lib::{
 	},
 	runtime::system::System,
 	ui::UI,
-	util::cache::Cache,
+	util::build_cache::BuildCache,
 };
-use crate::lib::util::build_cache::BuildCache;
 
 #[derive(Clone)]
 pub struct Generic
@@ -62,7 +64,9 @@ impl Generic
 	{
 		let source_files = project.source_files.get(&SourceFileType::Code);
 
-		let mut generic_cache: HashSet<String> = self.cache.read_set(&(toolset_compiler.to_string() + "_cache"))?;
+		let mut generic_cache: HashSet<String> = self
+			.cache
+			.read_set(&(toolset_compiler.to_string() + "_cache"))?;
 
 		let hashes: HashMap<&PathBuf, String> = source_files
 			.iter()
@@ -167,8 +171,11 @@ impl Generic
 		}
 
 		self.ui.remove_bar(progress);
-		
-		self.cache.write_set(&(toolset_compiler.to_string() + "_cache"), generic_cache)?;
+
+		self.cache.write_set(
+			&(toolset_compiler.to_string() + "_cache"),
+			generic_cache,
+		)?;
 
 		Ok(())
 	}
@@ -177,16 +184,30 @@ impl Generic
 		&mut self,
 		project: &Project,
 		toolset_linker: &String,
-		out_dir: &PathBuf,
+		out_dir: &Path,
 		output: &String,
-		o_files: &mut Vec<String>,
+		o_files: Vec<String>,
 	) -> anyhow::Result<()>
 	{
 		let spinner = self.ui.create_spinner("Linking...");
 		let mut linker = Command::new(toolset_linker);
 		let mut linker_args = Vec::new();
 
-		linker_args.append(o_files);
+		linker_args.append(
+			&mut o_files
+				.iter()
+				.filter_map(|absolute_path| {
+					Some(
+						diff_paths(
+							absolute_path,
+							&(self.environment).project_directory,
+						)?
+						.to_str()?
+						.to_string(),
+					)
+				})
+				.collect(),
+		);
 
 		for path in project.lib_paths.clone() {
 			linker_args.push(format!("-L{path}"))
@@ -247,7 +268,7 @@ impl Generic
 			toolset_linker,
 			&out_dir,
 			&project.output.clone().unwrap_or("out".to_string()),
-			&mut o_files,
+			o_files,
 		)?;
 
 		project.copy_assets(&self.environment.project_directory, &out_dir)?;

@@ -5,8 +5,7 @@ use std::{
 	},
 	fs,
 	fs::File,
-	io::Write
-	,
+	io::Write,
 	path::PathBuf,
 	process::Command,
 };
@@ -33,13 +32,12 @@ use crate::lib::{
 	runtime::system::System,
 	ui::UI,
 	util::{
-		cache::Cache,
+		build_cache::BuildCache
+		,
 		download_vswhere,
 		error::NuMakeError::VcNotFound,
 	},
 };
-use crate::lib::util::build_cache::BuildCache;
-use crate::lib::util::error::NuMakeError::MsvcWindowsOnly;
 
 #[derive(Clone)]
 pub struct MSVC
@@ -161,7 +159,8 @@ impl MSVC
 		 * We cache the hashes of files that have been previously compiled
 		 * to figure out whether we should compile them again.
 		 */
-		let mut msvc_cache: HashSet<String> = self.cache.read_set("msvc_cache")?;
+		let mut msvc_cache: HashSet<String> =
+			self.cache.read_set("msvc_cache")?;
 
 		/*
 		 * Hash the contents of every source file once
@@ -391,7 +390,7 @@ impl MSVC
 		working_directory: &PathBuf,
 		out_dir: &PathBuf,
 		msvc_env: &HashMap<String, String>,
-		o_files: &mut Vec<String>,
+		o_files: Vec<String>,
 	) -> anyhow::Result<()>
 	{
 		let spinner = self.ui.create_spinner("Linking...");
@@ -424,7 +423,18 @@ impl MSVC
 			linker_args.push(flag);
 		}
 
-		linker_args.append(o_files);
+		linker_args.append(
+			&mut o_files
+				.iter()
+				.filter_map(|absolute_path| {
+					Some(
+						diff_paths(absolute_path, working_directory)?
+							.to_str()?
+							.to_string(),
+					)
+				})
+				.collect(),
+		);
 
 		linker_args.append(&mut project.libs.clone());
 
@@ -510,7 +520,7 @@ impl MSVC
 			&working_directory,
 			&out_dir,
 			&msvc_env,
-			&mut o_files,
+			o_files,
 		)?;
 
 		project.copy_assets(&self.environment.project_directory, &out_dir)?;
