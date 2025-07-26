@@ -36,7 +36,7 @@ impl Init {
 		)?;
 
 		match cmd {
-			SubCommands::Build(args) => runtime.execute_task(&*args.task),
+			SubCommands::Build(args) => runtime.execute_task(&args.task),
 
 			SubCommands::List(_) => {
 				println!("Available Tasks: {}", runtime.get_tasks().join(", "));

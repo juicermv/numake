@@ -27,6 +27,7 @@ use crate::lib::{
 	ui::UI,
 	util::build_cache::BuildCache,
 };
+use crate::lib::data::flag_type::FlagType;
 
 #[derive(Clone)]
 pub struct Generic
@@ -151,7 +152,7 @@ impl Generic
 				compiler_args.push(format!("-D{define}"))
 			}
 
-			for flag in project.compiler_flags.clone() {
+			for flag in project.get_flags(FlagType::Compiler).clone() {
 				compiler_args.push(flag)
 			}
 
@@ -218,7 +219,7 @@ impl Generic
 			linker_args.push(format!("-l{lib}"))
 		}
 
-		for flag in project.linker_flags.clone() {
+		for flag in project.get_flags(FlagType::Linker).clone() {
 			linker_args.push(flag)
 		}
 

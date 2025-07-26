@@ -3,17 +3,18 @@ use anyhow::anyhow;
 use mlua::prelude::{LuaFunction, LuaResult, LuaValue};
 use mlua::{FromLua, Lua, UserData, UserDataMethods, Value};
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub struct TaskManager {
-	tasks: Arc<Mutex<HashMap<String, LuaFunction>>>,
+	tasks: Rc<Mutex<HashMap<String, LuaFunction>>>,
 }
 
 impl TaskManager {
 	pub fn new() -> Self {
 		TaskManager {
-			tasks: Arc::new(Mutex::new(HashMap::new())),
+			tasks: Rc::new(Mutex::new(HashMap::new())),
 		}
 	}
 

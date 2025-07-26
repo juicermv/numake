@@ -4,4 +4,5 @@
 .vscode/
 .numake/
 examples/*/numake
+examples/*/numake_build
 .DS_Store

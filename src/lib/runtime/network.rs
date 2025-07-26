@@ -39,56 +39,54 @@ impl Network {
 				.to_str()
 				.unwrap_or("ERROR")
 				.to_string())
-		} else {
-			if self.cache.check_file_exists(&url) {
-				let spinner = self.ui.create_spinner(format!(
-					"Archive found in cache. Extracting... [{}]",
-					&url
-				));
-				ZipArchive::new(Cursor::new(self.cache.read_file(&url)?))?
-					.extract(self.cache.get_dir(&url)?)?;
-				self.ui.println("Done!", ok::Ok::default());
-				spinner.finish();
+		} else if self.cache.check_file_exists(&url) {
+  				let spinner = self.ui.create_spinner(format!(
+  					"Archive found in cache. Extracting... [{}]",
+  					&url
+  				));
+  				ZipArchive::new(Cursor::new(self.cache.read_file(&url)?))?
+  					.extract(self.cache.get_dir(&url)?)?;
+  				self.ui.println("Done!", ok::Ok::default());
+  				spinner.finish();
 
-				Ok(self
-					.cache
-					.get_dir(&url)?
-					.to_str()
-					.unwrap_or("ERROR")
-					.to_string())
-			} else {
-				let response = reqwest::blocking::get(&url)?;
-				let status = response.status();
-				if status.is_success() {
-					let spinner = self
-						.ui
-						.create_spinner("Downloading & extracting archive...");
-					self.ui.println(
-						format!(
-							"Server responded with {}! [{}]",
-							response.status(),
-							&url
-						),
-						ok::Ok::default(),
-					);
-					let path = self.cache.get_dir(&url)?;
+  				Ok(self
+  					.cache
+  					.get_dir(&url)?
+  					.to_str()
+  					.unwrap_or("ERROR")
+  					.to_string())
+  			} else {
+  				let response = reqwest::blocking::get(&url)?;
+  				let status = response.status();
+  				if status.is_success() {
+  					let spinner = self
+  						.ui
+  						.create_spinner("Downloading & extracting archive...");
+  					self.ui.println(
+  						format!(
+  							"Server responded with {}! [{}]",
+  							response.status(),
+  							&url
+  						),
+  						ok::Ok::default(),
+  					);
+  					let path = self.cache.get_dir(&url)?;
 
-					let data = response.bytes()?;
-					self.cache.write_file(&url, data.clone())?;
-					ZipArchive::new(Cursor::new(data.clone()))?
-						.extract(&path)?;
-					spinner.finish_and_clear();
-					self.ui.println(
-						format!("Done extracting! [{}]", url),
-						ok::Ok::default(),
-					);
+  					let data = response.bytes()?;
+  					self.cache.write_file(&url, data.clone())?;
+  					ZipArchive::new(Cursor::new(data.clone()))?
+  						.extract(&path)?;
+  					spinner.finish_and_clear();
+  					self.ui.println(
+  						format!("Done extracting! [{}]", url),
+  						ok::Ok::default(),
+  					);
 
-					Ok(path.to_str().unwrap().to_string())
-				} else {
-					anyhow::bail!("Server responded with {}! [{}]", status, url)
-				}
-			}
-		}
+  					Ok(path.to_str().unwrap().to_string())
+  				} else {
+  					anyhow::bail!("Server responded with {}! [{}]", status, url)
+  				}
+  			}
 	}
 }
 

@@ -1,47 +1,30 @@
-use mlua::{FromLua, IntoLua, Lua};
-use mlua::Error::UserDataTypeMismatch;
+use crate::lib::data::project_language::ProjectLanguage;
 use mlua::prelude::{LuaResult, LuaValue};
-use strum_macros::IntoStaticStr;
+use mlua::Error::UserDataTypeMismatch;
+use mlua::{ExternalError, FromLua, IntoLua, Lua, Value};
+use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+use strum_macros::{EnumString, IntoStaticStr};
 
-
-#[derive(Debug, Clone, IntoStaticStr, Default)]
+#[derive(
+	Debug, Clone, IntoStaticStr, Default, Serialize, Deserialize, EnumString,
+)]
 pub enum ProjectType {
-    #[default]
-    Executable,
-    StaticLibrary,
-    DynamicLibrary,
-}
-
-impl IntoLua for ProjectType {
-    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
-        let me_str: &str = self.into();
-        me_str.into_lua(lua)
-    }
+	#[default]
+	Executable,
+	StaticLibrary,
+	DynamicLibrary,
 }
 
 impl FromLua for ProjectType {
-    fn from_lua(lua_value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        match lua_value {
-            LuaValue::String(ref string) => {
-                let project_type_str = string.to_str()?;
-                match project_type_str.to_lowercase().as_str() {
-                    "executable" => Ok(ProjectType::Executable),
-                    "staticlibrary" => Ok(ProjectType::StaticLibrary),
-                    "dynamiclibrary" => Ok(ProjectType::DynamicLibrary),
-                    _ => Err(UserDataTypeMismatch)
-                }
-            }
-
-            LuaValue::Number(ref number) => {
-                match (number - 0f64) as i64 {
-                    1 => Ok(ProjectType::Executable),
-                    2 => Ok(ProjectType::StaticLibrary),
-                    3 => Ok(ProjectType::DynamicLibrary),
-                    _ => Err(UserDataTypeMismatch)
-                }
-            }
-
-            _ => Err(UserDataTypeMismatch)
-        }
-    }
+	fn from_lua(
+		value: Value,
+		lua: &Lua,
+	) -> mlua::Result<Self> {
+		match value {
+			Value::String(str) => Self::from_str(&str.to_str()?.to_string())
+				.map_err(|e| e.into_lua_err()),
+			_ => Err(mlua::Error::UserDataTypeMismatch),
+		}
+	}
 }
