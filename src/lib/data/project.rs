@@ -123,7 +123,7 @@ impl UserData for Project {
 				Ok(())
 			},
 		);
-
+    
 		methods.add_method_mut("include", |_, this, value: Either<String, Vec<String>>| {
 			match value {
 				Either::First(path) => this.include_paths.push(path),
