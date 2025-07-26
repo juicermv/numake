@@ -123,9 +123,12 @@ impl UserData for Project {
 				Ok(())
 			},
 		);
-
-		methods.add_method_mut("include", |_, this, path: String| {
-			this.include_paths.push(path);
+    
+		methods.add_method_mut("include", |_, this, value: Either<String, Vec<String>>| {
+			match value {
+				Either::First(path) => this.include_paths.push(path),
+				Either::Second(paths) => this.include_paths.extend(paths),
+			}
 			Ok(())
 		});
 
@@ -144,18 +147,21 @@ impl UserData for Project {
 			},
 		);
 
-		methods.add_method_mut("lib_path", |_, this, path: String| {
-			this.lib_paths.push(path);
+		methods.add_method_mut("lib_path", |_, this, value: Either<String, Vec<String>>| {
+			match value {
+				Either::First(path) => this.lib_paths.push(path),
+				Either::Second(paths) => this.lib_paths.extend(paths),
+			}
 			Ok(())
 		});
 
 		methods.add_method_mut(
 			"define",
-			|_, this, (key, value): (String, Option<String>)| {
-				this.defines.push(match value {
-					Some(v) => format!("{}={}", key, v),
-					None => key,
-				});
+			|_, this, value: Either<String, Vec<String>>| {
+				match value {
+					Either::First(str) => this.defines.push(str),
+					Either::Second(arr) => this.defines.extend(arr)
+				}
 				Ok(())
 			},
 		);
