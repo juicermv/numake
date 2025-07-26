@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 use mlua::{IntoLua, Lua};
 use mlua::prelude::{LuaResult, LuaValue};
+use serde::{Deserialize, Serialize};
 use strum_macros::{EnumIter, IntoStaticStr};
 
-#[derive(Debug, Copy, Clone, EnumIter, Hash, PartialEq, Eq, IntoStaticStr)]
+#[derive(Debug, Copy, Clone, EnumIter, Hash, PartialEq, Eq, IntoStaticStr, Serialize, Deserialize)]
 pub enum SourceFileType {
     Code,
     Resource,
@@ -32,12 +33,5 @@ impl From<&PathBuf> for SourceFileType {
                 }
             }
         }
-    }
-}
-
-impl IntoLua for SourceFileType {
-    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
-        let me_str: &str = self.into();
-        me_str.into_lua(lua)
     }
 }

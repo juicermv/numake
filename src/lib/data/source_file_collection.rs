@@ -1,9 +1,10 @@
 use crate::lib::data::source_file_type::SourceFileType;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SourceFileCollection {
 	files: HashMap<SourceFileType, HashSet<PathBuf>>,
 }

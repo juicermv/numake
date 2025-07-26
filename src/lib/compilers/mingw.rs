@@ -30,6 +30,7 @@ use crate::lib::{
 	ui::UI,
 	util::build_cache::BuildCache,
 };
+use crate::lib::data::flag_type::FlagType;
 
 #[derive(Clone)]
 pub struct MinGW
@@ -168,7 +169,7 @@ impl MinGW
 				compiler_args.push(format!("-D{define}"))
 			}
 
-			for flag in project.compiler_flags.clone() {
+			for flag in project.get_flags(FlagType::Compiler).clone() {
 				compiler_args.push(flag)
 			}
 
@@ -244,6 +245,10 @@ impl MinGW
 
 			for define in project.defines.clone() {
 				res_compiler_args.push(format!("-D{define}"));
+			}
+
+			for flag in project.get_flags(FlagType::WINDRES).clone() {
+				res_compiler_args.push(flag)
 			}
 
 			res_compiler_args
@@ -340,11 +345,11 @@ impl MinGW
 					linker_args.push(format!("-l{lib}"))
 				}
 
-				for flag in project.compiler_flags.clone() {
+				for flag in project.get_flags(FlagType::Compiler).clone() {
 					linker_args.push(flag)
 				}
 
-				for flag in project.linker_flags.clone() {
+				for flag in project.get_flags(FlagType::Linker).clone() {
 					linker_args.push("-Wl,".to_string() + &flag)
 				}
 

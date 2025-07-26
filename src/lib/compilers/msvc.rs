@@ -40,6 +40,7 @@ use crate::lib::{
 		error::NuMakeError::VcNotFound,
 	},
 };
+use crate::lib::data::flag_type::FlagType;
 
 #[derive(Clone)]
 pub struct MSVC
@@ -256,7 +257,7 @@ impl MSVC
 				compiler_args.push(format!("-D{define}"));
 			}
 
-			for flag in project.compiler_flags.clone() {
+			for flag in project.get_flags(FlagType::Compiler).clone() {
 				compiler_args.push(flag)
 			}
 
@@ -329,6 +330,10 @@ impl MSVC
 
 			for define in project.defines.clone() {
 				res_compiler_args.push(format!("-d{define}"));
+			}
+
+			for flag in project.get_flags(FlagType::RC).clone() {
+				res_compiler_args.push(flag)
 			}
 
 			res_compiler_args
@@ -416,7 +421,7 @@ impl MSVC
 				.push(format!("/DEF:{}", def_file.to_str().unwrap_or("ERROR")));
 		}
 
-		for flag in project.linker_flags.clone() {
+		for flag in project.get_flags(FlagType::Linker).clone() {
 			linker_args.push(flag);
 		}
 
